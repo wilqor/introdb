@@ -155,7 +155,6 @@ class UnorderedHeapFileTest {
 
 	}
 	
-
 	private Entry newEntry(Serializable firstkey, Serializable firstvalue) {
 		Entry entry = new Entry(firstkey,firstvalue);
 		return entry;
