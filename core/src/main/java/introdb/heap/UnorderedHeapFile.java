@@ -43,7 +43,7 @@ class UnorderedHeapFile implements Store, Iterable<Record> {
 	}
 
 	@Override
-	public void put(Entry entry) throws IOException, ClassNotFoundException {
+	public synchronized void put(Entry entry) throws IOException, ClassNotFoundException {
 		
 		assertTooManyPages();
 		
@@ -71,7 +71,7 @@ class UnorderedHeapFile implements Store, Iterable<Record> {
 	}
 
 	@Override
-	public Object get(Serializable key) throws IOException, ClassNotFoundException {
+	public synchronized Object get(Serializable key) throws IOException, ClassNotFoundException {
 
 		// serialize key
 		byte[] keySer = serializeKey(key);
