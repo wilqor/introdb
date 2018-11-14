@@ -18,9 +18,6 @@ import org.openjdk.jmh.annotations.TearDown;
 
 @State(Scope.Benchmark)
 public class ConcurrentReadWriteUnorderedHeapFileBenchmark {
-		
-
-
 
 	private static final int MAX_PAGES = 100_000;
 	

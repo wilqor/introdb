@@ -16,7 +16,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.IntFunction;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
@@ -40,29 +39,23 @@ public class ConcurrentReadWriteUnorderedHeapFileTest {
 	private Path heapFilePath;
 	private Store heapFile;
 	private CountDownLatch writersLatch;
-
-	private ExecutorService readersExecutor;
-
-	private ExecutorService writersExecutor;
+	private ExecutorService executors;
 
 	@BeforeEach
 	public void setUp() throws IOException {
 		heapFilePath = Files.createTempFile("heap", "0001");
 		heapFile = new UnorderedHeapFile(heapFilePath, MAX_NR_PAGES, PAGE_SIZE);
 
-		readersExecutor = Executors.newCachedThreadPool();
-		writersExecutor = Executors.newCachedThreadPool();
+		executors = Executors.newCachedThreadPool();
 	}
 
 	@AfterEach
 	public void tearDown() throws IOException, InterruptedException {
 		Files.delete(heapFilePath);
 		
-		readersExecutor.shutdown();
-		readersExecutor.awaitTermination(1, TimeUnit.MINUTES);
+		executors.shutdown();
+		executors.awaitTermination(1, TimeUnit.MINUTES);
 		
-		writersExecutor.shutdown();
-		writersExecutor.awaitTermination(1, TimeUnit.MINUTES);
 	}
 
 	@Test
@@ -73,12 +66,12 @@ public class ConcurrentReadWriteUnorderedHeapFileTest {
 		
 		// schedule threads which execute writes to heap file
 		var ws = range(0, nrOfWriters)
-				.mapToObj(writersTasksWith(writersExecutor))
+				.mapToObj(writersTasksWith(executors))
 				.collect(toList());
 
 		// schedule threads which execute reads to heap file
 		var rs = range(0, nrOfReaders)
-				.mapToObj(readersTasksWith(readersExecutor))
+				.mapToObj(readersTasksWith(executors))
 				.collect(toList());
 
 		// wait for readers to complete
@@ -114,9 +107,9 @@ public class ConcurrentReadWriteUnorderedHeapFileTest {
 		}
 		
 		Random random = new Random();
-		int nextInt = random.nextInt(20);
-		for (int i = 0; i < 1_000; i++) {
+		for (int i = 0; i < OPS_PER_WORKER; i++) {
 			try {
+				int nextInt = random.nextInt(20);
 				Integer value = (Integer) heapFile.get(nextInt);
 				if (value != null && !value.equals(Integer.valueOf(nextInt))) {
 					fail("incorrect value read from heap file");
@@ -130,9 +123,9 @@ public class ConcurrentReadWriteUnorderedHeapFileTest {
 	private void doWrites() {
 		writersLatch.countDown();
 		Random random = new Random();
-		int nextInt = random.nextInt(20);
 		for (int i = 0; i < OPS_PER_WORKER; i++) {
 			try {
+				int nextInt = random.nextInt(20);
 				heapFile.put(new Entry(nextInt, nextInt));
 			} catch (ClassNotFoundException | IOException e) {
 				fail(e);
