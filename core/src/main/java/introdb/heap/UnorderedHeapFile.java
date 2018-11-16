@@ -86,7 +86,7 @@ class UnorderedHeapFile implements Store, Iterable<Record> {
 		return null;
 	}
 
-	public Object remove(Serializable key) throws IOException, ClassNotFoundException {
+	public synchronized Object remove(Serializable key) throws IOException, ClassNotFoundException {
 		// serialize key
 		byte[] keySer = serializeKey(key);
 
