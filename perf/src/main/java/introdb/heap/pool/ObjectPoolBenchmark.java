@@ -15,35 +15,30 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.infra.Blackhole;
 
 @State(Scope.Benchmark)
-public class PoolBenchmark {
-	
-	private Pool<ReentrantLock> pool;
+public class ObjectPoolBenchmark {
+
+	private ObjectPool<ReentrantLock> pool;
 
 	@Setup(Level.Iteration)
 	public void setUp() throws IOException, ClassNotFoundException {
-		pool = new Pool<>(ReentrantLock::new,  (ReentrantLock l) -> !l.isLocked());
+		pool = new ObjectPool<>(ReentrantLock::new, (ReentrantLock l) -> !l.isLocked());
 	}
-	
+
 	@TearDown(Level.Iteration)
-	public void tearDown() throws IOException, InterruptedException{
+	public void tearDown() throws IOException, InterruptedException {
 		pool.shutdown();
 	}
-	
-    @Benchmark
-    @Threads(8)
-    public void testPool(Blackhole blackhole) throws InterruptedException, ExecutionException {
-    	CompletableFuture<ReentrantLock> future = pool.get();
-    	ReentrantLock lock = future.get();
-    	try {
-    		lock.lock();
-    		try {
-    			Blackhole.consumeCPU(100);
-    		} finally {
-    			lock.unlock();
-    		}
-    	} finally {
-    		pool.release(lock);
-    	}
-    }
-    
+
+	@Benchmark
+	@Threads(8)
+	public void testPool(Blackhole blackhole) throws InterruptedException, ExecutionException {
+		CompletableFuture<ReentrantLock> future = pool.borrowObject();
+		ReentrantLock lock = future.get();
+		try {
+			blackhole.consume(lock);
+		} finally {
+			pool.returnObject(lock);
+		}
+	}
+
 }
