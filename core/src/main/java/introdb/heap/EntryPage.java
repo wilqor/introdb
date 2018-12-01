@@ -38,7 +38,7 @@ class EntryPage {
         while ((currentRecord = EntryRecord.fromBuffer(byteBuffer, bufferPosition)) != null) {
             bufferPosition = currentRecord.pageOffset();
             byteBuffer.position(bufferPosition);
-            if (currentRecord.notDeleted() && currentRecord.entry().key().equals(key)) {
+            if (currentRecord.entry().key().equals(key)) {
                 return currentRecord;
             }
         }

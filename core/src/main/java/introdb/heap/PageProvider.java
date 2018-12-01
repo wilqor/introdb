@@ -66,19 +66,17 @@ final class PageProvider {
 
     private class PageIterator implements Iterator<EntryPage> {
         private final FileChannel fileChannel;
-        private final long fileSize;
-        private int currentPosition;
+        private long currentPosition;
         private EntryPage currentPage;
 
         PageIterator(FileChannel fileChannel, long fileSize) {
             this.fileChannel = fileChannel;
-            this.fileSize = fileSize;
-            this.currentPosition = 0;
+            this.currentPosition = fileSize;
         }
 
         @Override
         public boolean hasNext() {
-            return currentPosition < fileSize;
+            return currentPosition > 0;
         }
 
         @Override
@@ -88,9 +86,9 @@ final class PageProvider {
             }
             ByteBuffer byteBuffer = ByteBuffer.allocate(pageSize);
             try {
+                currentPosition -= pageSize;
                 fileChannel.read(byteBuffer, currentPosition);
                 currentPage = new EntryPage(pageSize, fileChannel, byteBuffer, currentPosition);
-                currentPosition += pageSize;
                 return currentPage;
             } catch (IOException e) {
                 throw new RuntimeException("Error reading page of entries", e);
