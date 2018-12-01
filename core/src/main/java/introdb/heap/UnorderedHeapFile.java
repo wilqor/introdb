@@ -21,7 +21,7 @@ class UnorderedHeapFile implements Store {
             findAndDeleteRecord(fileChannel, entry.key());
             var record = EntryRecord.fromEntry(entry);
             pageProvider.pageForAppending(fileChannel, record.recordSize())
-                    .writeRecordAtCurrentPosition(record);
+                    .appendRecord(record);
         }
     }
 

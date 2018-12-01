@@ -69,6 +69,20 @@ final class EntryRecord {
         }
     }
 
+    static int findRemainingSpace(ByteBuffer byteBuffer, int pageSize) {
+        int position = 0;
+        while (position < pageSize) {
+            byteBuffer.get(position);
+            short entrySize = byteBuffer.getShort(position + 1);
+            if (entrySize == 0) {
+                break;
+            } else {
+                position += META_DATA_BYTES + entrySize;
+            }
+        }
+        return pageSize - position;
+    }
+
     static EntryRecord fromEntry(Entry entry) throws IOException {
         byte[] entryBytes = bytesFromEntry(entry);
         return new EntryRecord(false, entryBytes, entry);

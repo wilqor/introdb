@@ -20,7 +20,7 @@ final class PageProvider {
         return new PageIterator(fileChannel, fileSize);
     }
 
-    EntryPage pageForAppending(FileChannel fileChannel, int recordSize) throws IOException, ClassNotFoundException {
+    EntryPage pageForAppending(FileChannel fileChannel, int recordSize) throws IOException {
         validateRecordSize(recordSize);
         long fileSize = validateFileSize(fileChannel);
         long pagesCount = fileSize / pageSize;
@@ -30,10 +30,11 @@ final class PageProvider {
         } else {
             // last page or new page
             long lastPagePosition = fileSize - pageSize;
-            EntryPage lastPage = new EntryPage(pageSize, fileChannel, ByteBuffer.allocate(pageSize), lastPagePosition);
-            int remainingSpace = lastPage.findRemainingSpace();
+            ByteBuffer byteBuffer = ByteBuffer.allocate(pageSize);
+            fileChannel.read(byteBuffer, lastPagePosition);
+            int remainingSpace = EntryRecord.findRemainingSpace(byteBuffer, pageSize);
             if (remainingSpace >= recordSize) {
-                return lastPage;
+                return new EntryPage(pageSize, fileChannel, byteBuffer, lastPagePosition);
             } else {
                 validatePagesCount(pagesCount, maxNrPages);
                 return new EntryPage(pageSize, fileChannel, ByteBuffer.allocate(pageSize), fileSize);
