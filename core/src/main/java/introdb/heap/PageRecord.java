@@ -28,6 +28,15 @@ final class PageRecord {
         return new PageRecord(entryRecord.toDeleted(), pageOffset);
     }
 
+    void writeToBuffer(ByteBuffer buffer) {
+        entryRecord.writeToBuffer(buffer, pageOffset);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(entryRecord, pageOffset);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -38,19 +47,10 @@ final class PageRecord {
     }
 
     @Override
-    public int hashCode() {
-        return Objects.hash(entryRecord, pageOffset);
-    }
-
-    @Override
     public String toString() {
         return "PageRecord{" +
                 "entryRecord=" + entryRecord +
                 ", pageOffset=" + pageOffset +
                 '}';
-    }
-
-    void writeToBuffer(ByteBuffer buffer) {
-        entryRecord.writeToBuffer(buffer, pageOffset);
     }
 }
