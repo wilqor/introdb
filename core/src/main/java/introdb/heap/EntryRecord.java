@@ -5,7 +5,9 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 final class EntryRecord {
-    private static final int RECORD_META_DATA_SIZE = 1 + (Short.SIZE / Byte.SIZE);
+    private static final int DELETED_FLAG_BYTES = 1;
+    private static final int ENTRY_SIZE_BYTES = (Short.SIZE / Byte.SIZE);
+    private static final int RECORD_META_DATA_BYTES = DELETED_FLAG_BYTES + ENTRY_SIZE_BYTES;
     private static final byte DELETED_TRUE = 1;
     private static final byte DELETED_FALSE = 0;
 
@@ -28,7 +30,7 @@ final class EntryRecord {
     }
 
     int getRecordSize() {
-        return RECORD_META_DATA_SIZE + entryBytes.length;
+        return RECORD_META_DATA_BYTES + entryBytes.length;
     }
 
     EntryRecord toDeleted() {
@@ -80,6 +82,7 @@ final class EntryRecord {
         byte deletedFlag = byteBuffer.get();
         short entrySize = byteBuffer.getShort();
         if (entrySize == 0) {
+            byteBuffer.position(byteBuffer.position() - RECORD_META_DATA_BYTES);
             return null;
         }
         byte[] entryBytes = new byte[entrySize];
