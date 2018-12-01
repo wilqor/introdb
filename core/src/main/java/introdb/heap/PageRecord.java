@@ -12,9 +12,16 @@ final class PageRecord {
         this.pageOffset = pageOffset;
     }
 
+    int pageOffset() {
+        return pageOffset;
+    }
 
     Entry entry() {
         return entryRecord.entry();
+    }
+
+    boolean notDeleted() {
+        return entryRecord.notDeleted();
     }
 
     PageRecord toDeleted() {

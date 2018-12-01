@@ -19,7 +19,7 @@ class UnorderedHeapFile implements Store {
     public void put(Entry entry) throws IOException, ClassNotFoundException {
         try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
             findAndDeleteRecord(fileChannel, entry.key());
-            var record = EntryRecord.   fromEntry(entry);
+            var record = EntryRecord.fromEntry(entry);
             pageProvider.pageForAppending(fileChannel, record.recordSize())
                     .appendRecord(record);
         }

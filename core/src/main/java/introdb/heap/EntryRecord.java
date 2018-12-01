@@ -8,9 +8,12 @@ import java.util.Objects;
 final class EntryRecord {
     private static final int DELETED_FLAG_BYTES = 1;
     private static final int ENTRY_SIZE_BYTES = (Short.SIZE / Byte.SIZE);
-    private static final int META_DATA_BYTES = DELETED_FLAG_BYTES + ENTRY_SIZE_BYTES;
+    private static final int END_MARKER_BYTES = 1;
+    private static final int META_DATA_BYTES = DELETED_FLAG_BYTES + ENTRY_SIZE_BYTES + END_MARKER_BYTES;
     private static final byte DELETED_TRUE = 1;
     private static final byte DELETED_FALSE = 0;
+    private static final byte END_MARKER = (byte) 255;
+    private static final int END_MARKER_NOT_FOUND_POSITION = -1;
 
     private final boolean deleted;
     private final byte[] entryBytes;
@@ -61,26 +64,16 @@ final class EntryRecord {
     }
 
     void writeToBuffer(ByteBuffer buffer, int position) {
-        buffer.put(position, deleted ? DELETED_TRUE : DELETED_FALSE);
-        buffer.putShort(position + DELETED_FLAG_BYTES, (short) entryBytes.length);
-        int entryBytesOffset = position + META_DATA_BYTES;
+        int offset = position;
         for (int i = 0; i < entryBytes.length; i++) {
-            buffer.put(entryBytesOffset + i, entryBytes[i]);
+            buffer.put(offset + i, entryBytes[i]);
         }
-    }
-
-    static int findRemainingSpace(ByteBuffer byteBuffer, int pageSize) {
-        int position = 0;
-        while (position < pageSize) {
-            byteBuffer.get(position);
-            short entrySize = byteBuffer.getShort(position + 1);
-            if (entrySize == 0) {
-                break;
-            } else {
-                position += META_DATA_BYTES + entrySize;
-            }
-        }
-        return pageSize - position;
+        offset += entryBytes.length;
+        buffer.put(offset, deleted ? DELETED_TRUE : DELETED_FALSE);
+        offset += DELETED_FLAG_BYTES;
+        buffer.putShort(offset, (short) entryBytes.length);
+        offset += ENTRY_SIZE_BYTES;
+        buffer.put(offset, END_MARKER);
     }
 
     static EntryRecord fromEntry(Entry entry) throws IOException {
@@ -96,17 +89,43 @@ final class EntryRecord {
         return byteOutStr.toByteArray();
     }
 
-    static EntryRecord fromBuffer(ByteBuffer byteBuffer, int position) throws IOException, ClassNotFoundException {
-        byte deletedFlag = byteBuffer.get(position);
-        short entrySize = byteBuffer.getShort(position + DELETED_FLAG_BYTES);
-        if (entrySize == 0) {
-            return null;
+    static int findRemainingSpace(ByteBuffer byteBuffer, int pageSize) {
+        int endMarkerPosition = findEndMarkerPosition(byteBuffer, pageSize);
+        if (endMarkerPosition == END_MARKER_NOT_FOUND_POSITION) {
+            return pageSize;
+        } else {
+            return pageSize - (endMarkerPosition + END_MARKER_BYTES);
         }
-        byte[] bufferBytes = byteBuffer.array();
-        int entryBytesOffset = position + META_DATA_BYTES;
-        byte[] entryBytes = Arrays.copyOfRange(bufferBytes, entryBytesOffset, position + META_DATA_BYTES + entrySize);
-        Entry entry = entryFromBytes(entryBytes);
-        return new EntryRecord(deletedFlag == DELETED_TRUE, entryBytes, entry);
+    }
+
+    private static int findEndMarkerPosition(ByteBuffer byteBuffer, int position) {
+        while (position > 0) {
+            position -= END_MARKER_BYTES;
+            byte nextByte = byteBuffer.get(position);
+            if (nextByte == END_MARKER) {
+                return position;
+            }
+        }
+        return END_MARKER_NOT_FOUND_POSITION;
+    }
+
+    static PageRecord fromBuffer(ByteBuffer byteBuffer, int position) throws IOException, ClassNotFoundException {
+        int endMarkerPosition = findEndMarkerPosition(byteBuffer, position);
+        if (endMarkerPosition == END_MARKER_NOT_FOUND_POSITION) {
+            return null;
+        } else {
+            int offset = endMarkerPosition;
+            offset -= ENTRY_SIZE_BYTES;
+            short entrySize = byteBuffer.getShort(offset);
+            offset -= DELETED_FLAG_BYTES;
+            byte deletedFlag = byteBuffer.get(offset);
+            byte[] bufferBytes = byteBuffer.array();
+            int pageOffset = offset - entrySize;
+            byte[] entryBytes = Arrays.copyOfRange(bufferBytes, pageOffset, offset);
+            Entry entry = entryFromBytes(entryBytes);
+            EntryRecord entryRecord = new EntryRecord(deletedFlag == DELETED_TRUE, entryBytes, entry);
+            return new PageRecord(entryRecord, pageOffset);
+        }
     }
 
     private static Entry entryFromBytes(byte[] entryBytes) throws IOException, ClassNotFoundException {

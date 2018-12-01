@@ -25,21 +25,21 @@ class EntryPage {
                     "size: %d, remaining space: %d", entryRecord, entryRecord.recordSize(), remainingSpace));
         }
         int writePosition = pageSize - remainingSpace;
-        entryRecord.writeToBuffer(byteBuffer, writePosition);
+        PageRecord record = new PageRecord(entryRecord, writePosition);
+        record.writeToBuffer(byteBuffer);
         saveChanges();
     }
 
 
     PageRecord searchForRecord(Serializable key) throws IOException, ClassNotFoundException {
         byteBuffer.flip();
-        EntryRecord currentRecord;
-        int bufferPosition = 0;
+        PageRecord currentRecord;
+        int bufferPosition = pageSize;
         while ((currentRecord = EntryRecord.fromBuffer(byteBuffer, bufferPosition)) != null) {
-            int pageOffset = bufferPosition;
-            bufferPosition += currentRecord.recordSize();
+            bufferPosition = currentRecord.pageOffset();
             byteBuffer.position(bufferPosition);
             if (currentRecord.notDeleted() && currentRecord.entry().key().equals(key)) {
-                return new PageRecord(currentRecord, pageOffset);
+                return currentRecord;
             }
         }
         return null;
