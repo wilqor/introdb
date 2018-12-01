@@ -26,32 +26,34 @@ class EntryPage {
         }
         int writePosition = pageSize - remainingSpace;
         entryRecord.writeToBuffer(byteBuffer, writePosition);
-        byteBuffer.flip();
-        byteBuffer.limit(pageSize);
-        fileChannel.write(byteBuffer, fileOffset);
+        saveChanges();
     }
 
 
-    EntryRecord searchForRecord(Serializable key) throws IOException, ClassNotFoundException {
+    PageRecord searchForRecord(Serializable key) throws IOException, ClassNotFoundException {
         byteBuffer.flip();
         EntryRecord currentRecord;
         int bufferPosition = 0;
         while ((currentRecord = EntryRecord.fromBuffer(byteBuffer, bufferPosition)) != null) {
+            int pageOffset = bufferPosition;
             bufferPosition += currentRecord.recordSize();
             byteBuffer.position(bufferPosition);
             if (currentRecord.notDeleted() && currentRecord.entry().key().equals(key)) {
-                return currentRecord;
+                return new PageRecord(currentRecord, pageOffset);
             }
         }
         return null;
     }
 
-    void deleteLastFoundRecord(EntryRecord entryRecord) throws IOException {
-        var deleted = entryRecord.toDeleted();
-        deleted.writeToBuffer(byteBuffer, byteBuffer.position() - deleted.recordSize());
+    void deleteRecord(PageRecord record) throws IOException {
+        var deleted = record.toDeleted();
+        deleted.writeToBuffer(byteBuffer);
+        saveChanges();
+    }
+
+    private void saveChanges() throws IOException {
         byteBuffer.flip();
         byteBuffer.limit(pageSize);
         fileChannel.write(byteBuffer, fileOffset);
     }
-
 }

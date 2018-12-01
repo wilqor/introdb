@@ -19,7 +19,7 @@ class UnorderedHeapFile implements Store {
     public void put(Entry entry) throws IOException, ClassNotFoundException {
         try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
             findAndDeleteRecord(fileChannel, entry.key());
-            var record = EntryRecord.fromEntry(entry);
+            var record = EntryRecord.   fromEntry(entry);
             pageProvider.pageForAppending(fileChannel, record.recordSize())
                     .appendRecord(record);
         }
@@ -50,7 +50,7 @@ class UnorderedHeapFile implements Store {
     private PageWithRecord findAndDeleteRecord(FileChannel fileChannel, Serializable key) throws IOException, ClassNotFoundException {
         var pageWithRecord = findPageWithRecord(fileChannel, key);
         if (pageWithRecord != null) {
-            pageWithRecord.getPage().deleteLastFoundRecord(pageWithRecord.getRecord());
+            pageWithRecord.getPage().deleteRecord(pageWithRecord.getRecord());
         }
         return pageWithRecord;
     }
@@ -59,9 +59,9 @@ class UnorderedHeapFile implements Store {
         var pageIterator = pageProvider.iterator(fileChannel);
         while (pageIterator.hasNext()) {
             var page = pageIterator.next();
-            var entryRecord = page.searchForRecord(key);
-            if (entryRecord != null) {
-                return new PageWithRecord(page, entryRecord);
+            var pageRecord = page.searchForRecord(key);
+            if (pageRecord != null) {
+                return new PageWithRecord(page, pageRecord);
             }
         }
         return null;

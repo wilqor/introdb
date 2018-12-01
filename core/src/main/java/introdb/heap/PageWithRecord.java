@@ -2,9 +2,9 @@ package introdb.heap;
 
 class PageWithRecord {
     private final EntryPage page;
-    private final EntryRecord record;
+    private final PageRecord record;
 
-    PageWithRecord(EntryPage page, EntryRecord record) {
+    PageWithRecord(EntryPage page, PageRecord record) {
         this.page = page;
         this.record = record;
     }
@@ -13,7 +13,7 @@ class PageWithRecord {
         return page;
     }
 
-    EntryRecord getRecord() {
+    PageRecord getRecord() {
         return record;
     }
 
