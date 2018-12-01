@@ -2,12 +2,13 @@ package introdb.heap;
 
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Objects;
 
 final class EntryRecord {
     private static final int DELETED_FLAG_BYTES = 1;
     private static final int ENTRY_SIZE_BYTES = (Short.SIZE / Byte.SIZE);
-    private static final int RECORD_META_DATA_BYTES = DELETED_FLAG_BYTES + ENTRY_SIZE_BYTES;
+    private static final int META_DATA_BYTES = DELETED_FLAG_BYTES + ENTRY_SIZE_BYTES;
     private static final byte DELETED_TRUE = 1;
     private static final byte DELETED_FALSE = 0;
 
@@ -21,16 +22,16 @@ final class EntryRecord {
         this.entry = entry;
     }
 
-    boolean isNotDeleted() {
+    boolean notDeleted() {
         return !deleted;
     }
 
-    Entry getEntry() {
+    Entry entry() {
         return entry;
     }
 
-    int getRecordSize() {
-        return RECORD_META_DATA_BYTES + entryBytes.length;
+    int recordSize() {
+        return META_DATA_BYTES + entryBytes.length;
     }
 
     EntryRecord toDeleted() {
@@ -59,10 +60,13 @@ final class EntryRecord {
                 '}';
     }
 
-    void writeToBuffer(ByteBuffer buffer) {
-        buffer.put(deleted ? DELETED_TRUE : DELETED_FALSE);
-        buffer.putShort((short) entryBytes.length);
-        buffer.put(entryBytes);
+    void writeToBuffer(ByteBuffer buffer, int position) {
+        buffer.put(position, deleted ? DELETED_TRUE : DELETED_FALSE);
+        buffer.putShort(position + DELETED_FLAG_BYTES, (short) entryBytes.length);
+        int entryBytesOffset = position + META_DATA_BYTES;
+        for (int i = 0; i < entryBytes.length; i++) {
+            buffer.put(entryBytesOffset + i, entryBytes[i]);
+        }
     }
 
     static EntryRecord fromEntry(Entry entry) throws IOException {
@@ -78,15 +82,15 @@ final class EntryRecord {
         return byteOutStr.toByteArray();
     }
 
-    static EntryRecord fromBuffer(ByteBuffer byteBuffer) throws IOException, ClassNotFoundException {
-        byte deletedFlag = byteBuffer.get();
-        short entrySize = byteBuffer.getShort();
+    static EntryRecord fromBuffer(ByteBuffer byteBuffer, int position) throws IOException, ClassNotFoundException {
+        byte deletedFlag = byteBuffer.get(position);
+        short entrySize = byteBuffer.getShort(position + DELETED_FLAG_BYTES);
         if (entrySize == 0) {
-            byteBuffer.position(byteBuffer.position() - RECORD_META_DATA_BYTES);
             return null;
         }
-        byte[] entryBytes = new byte[entrySize];
-        byteBuffer.get(entryBytes);
+        byte[] bufferBytes = byteBuffer.array();
+        int entryBytesOffset = position + META_DATA_BYTES;
+        byte[] entryBytes = Arrays.copyOfRange(bufferBytes, entryBytesOffset, position + META_DATA_BYTES + entrySize);
         Entry entry = entryFromBytes(entryBytes);
         return new EntryRecord(deletedFlag == DELETED_TRUE, entryBytes, entry);
     }

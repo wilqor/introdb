@@ -19,7 +19,7 @@ class EntryPage {
     }
 
     void writeRecordAtCurrentPosition(EntryRecord entryRecord) throws IOException {
-        entryRecord.writeToBuffer(byteBuffer);
+        entryRecord.writeToBuffer(byteBuffer, byteBuffer.position());
         byteBuffer.flip();
         byteBuffer.limit(pageSize);
         fileChannel.write(byteBuffer, fileOffset);
@@ -28,9 +28,12 @@ class EntryPage {
     EntryRecord searchForRecord(Serializable key) throws IOException, ClassNotFoundException {
         byteBuffer.flip();
         EntryRecord currentRecord;
-        while ((currentRecord = EntryRecord.fromBuffer(byteBuffer)) != null) {
-            if (currentRecord.isNotDeleted() && currentRecord.getEntry().key().equals(key)) {
-               return currentRecord;
+        int bufferPosition = 0;
+        while ((currentRecord = EntryRecord.fromBuffer(byteBuffer, bufferPosition)) != null) {
+            bufferPosition += currentRecord.recordSize();
+            byteBuffer.position(bufferPosition);
+            if (currentRecord.notDeleted() && currentRecord.entry().key().equals(key)) {
+                return currentRecord;
             }
         }
         return null;
@@ -38,8 +41,7 @@ class EntryPage {
 
     void deleteLastFoundRecord(EntryRecord entryRecord) throws IOException {
         var deleted = entryRecord.toDeleted();
-        byteBuffer.position(byteBuffer.position() - deleted.getRecordSize());
-        deleted.writeToBuffer(byteBuffer);
+        deleted.writeToBuffer(byteBuffer, byteBuffer.position() - deleted.recordSize());
         byteBuffer.flip();
         byteBuffer.limit(pageSize);
         fileChannel.write(byteBuffer, fileOffset);
@@ -49,9 +51,12 @@ class EntryPage {
         byteBuffer.clear();
         fileChannel.read(byteBuffer, fileOffset);
         byteBuffer.flip();
-        //noinspection StatementWithEmptyBody
-        while (EntryRecord.fromBuffer(byteBuffer) != null) {
+        int bufferPosition = 0;
+        EntryRecord entryRecord;
+        while ((entryRecord = EntryRecord.fromBuffer(byteBuffer, bufferPosition)) != null) {
+            bufferPosition += entryRecord.recordSize();
         }
+        byteBuffer.position(bufferPosition);
         return pageSize - byteBuffer.position();
     }
 

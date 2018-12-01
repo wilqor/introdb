@@ -23,7 +23,7 @@ class UnorderedHeapFile implements Store {
         try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
             findAndDeleteRecord(fileChannel, entry.key());
             var record = EntryRecord.fromEntry(entry);
-            EntryPage.findPageForAppending(pageSize, maxNrPages, fileChannel, record.getRecordSize())
+            EntryPage.findPageForAppending(pageSize, maxNrPages, fileChannel, record.recordSize())
                     .writeRecordAtCurrentPosition(record);
         }
     }
@@ -33,7 +33,7 @@ class UnorderedHeapFile implements Store {
         try (FileChannel fileChannel = FileChannel.open(path)) {
             var pageWithRecord = findPageWithRecord(fileChannel, key);
             if (pageWithRecord != null) {
-                return pageWithRecord.getRecord().getEntry().value();
+                return pageWithRecord.getRecord().entry().value();
             }
             return null;
         }
@@ -44,7 +44,7 @@ class UnorderedHeapFile implements Store {
         try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
             var pageWithRecord = findAndDeleteRecord(fileChannel, key);
             if (pageWithRecord != null) {
-                return pageWithRecord.getRecord().getEntry().value();
+                return pageWithRecord.getRecord().entry().value();
             }
             return null;
         }
