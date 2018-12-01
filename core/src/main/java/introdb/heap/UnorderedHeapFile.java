@@ -22,7 +22,7 @@ class UnorderedHeapFile implements Store {
     @Override
     public void put(Entry entry) throws IOException, ClassNotFoundException {
         remove(entry.key());
-        try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+        try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
             long currentSize = fileChannel.size();
             long fullPagesCount = currentSize / pageSize;
             long remainingPageSize = currentSize % pageSize;
@@ -31,21 +31,22 @@ class UnorderedHeapFile implements Store {
             if (record.getRecordSize() > pageSize) {
                 throw new IllegalArgumentException("Too large object!");
             }
-            long newPosition;
+            long pageStart;
             if ((pageSize - remainingPageSize) >= record.getRecordSize()) {
-                // write on last page
-                newPosition = currentSize;
+                // wrote on last page
+                pageStart = fullPagesCount * pageSize;
             } else {
-                // write to new page
+                // append new page
+                pageStart = totalPagesCount * pageSize;
                 if (totalPagesCount == maxNrPages) {
                     throw new IllegalArgumentException("Max number of pages reached!");
                 }
-                newPosition = totalPagesCount * pageSize;
             }
             ByteBuffer byteBuffer = ByteBuffer.allocate(pageSize);
+            fileChannel.read(byteBuffer, pageStart);
             record.writeToBuffer(byteBuffer);
             byteBuffer.flip();
-            fileChannel.write(byteBuffer, newPosition);
+            fileChannel.write(byteBuffer, pageStart);
         }
     }
 
@@ -87,9 +88,12 @@ class UnorderedHeapFile implements Store {
                         var deleted = entryRecord.toDeleted();
                         byteBuffer.position(byteBuffer.position() - deleted.getRecordSize());
                         deleted.writeToBuffer(byteBuffer);
+                        // flip for writing
                         byteBuffer.flip();
-                        fileChannel.position(fileChannel.position() - deleted.getRecordSize());
-                        fileChannel.write(byteBuffer);
+                        long writePosition = fileChannel.position() - byteBuffer.limit();
+                        // fill entire page
+                        byteBuffer.limit(pageSize);
+                        fileChannel.write(byteBuffer, writePosition);
                         return deleted.getEntry().value();
                     }
                 }
