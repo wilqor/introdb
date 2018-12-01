@@ -64,16 +64,12 @@ final class EntryRecord {
     }
 
     void writeToBuffer(ByteBuffer buffer, int position) {
-        int offset = position;
         for (int i = 0; i < entryBytes.length; i++) {
-            buffer.put(offset + i, entryBytes[i]);
+            buffer.put(position + i, entryBytes[i]);
         }
-        offset += entryBytes.length;
-        buffer.put(offset, deleted ? DELETED_TRUE : DELETED_FALSE);
-        offset += DELETED_FLAG_BYTES;
-        buffer.putShort(offset, (short) entryBytes.length);
-        offset += ENTRY_SIZE_BYTES;
-        buffer.put(offset, END_MARKER);
+        buffer.put(position + entryBytes.length, deleted ? DELETED_TRUE : DELETED_FALSE)
+                .putShort(position + entryBytes.length + DELETED_FLAG_BYTES, (short) entryBytes.length)
+                .put(position + entryBytes.length + DELETED_FLAG_BYTES + ENTRY_SIZE_BYTES, END_MARKER);
     }
 
     static EntryRecord fromEntry(Entry entry) throws IOException {
