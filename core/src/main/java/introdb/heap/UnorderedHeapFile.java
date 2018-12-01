@@ -7,15 +7,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
 class UnorderedHeapFile implements Store {
-
     private final Path path;
-    private final int pageSize;
-    private final int maxNrPages;
+    private final PageProvider pageProvider;
 
     UnorderedHeapFile(Path path, int maxNrPages, int pageSize) {
         this.path = path;
-        this.maxNrPages = maxNrPages;
-        this.pageSize = pageSize;
+        this.pageProvider = new PageProvider(pageSize, maxNrPages);
     }
 
     @Override
@@ -23,7 +20,7 @@ class UnorderedHeapFile implements Store {
         try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
             findAndDeleteRecord(fileChannel, entry.key());
             var record = EntryRecord.fromEntry(entry);
-            EntryPage.findPageForAppending(pageSize, maxNrPages, fileChannel, record.recordSize())
+            pageProvider.pageForAppending(fileChannel, record.recordSize())
                     .writeRecordAtCurrentPosition(record);
         }
     }
@@ -59,11 +56,12 @@ class UnorderedHeapFile implements Store {
     }
 
     private PageWithRecord findPageWithRecord(FileChannel fileChannel, Serializable key) throws IOException, ClassNotFoundException {
-        EntryPage nextPage;
-        while ((nextPage = EntryPage.findNextPage(pageSize, fileChannel)) != null) {
-            var entryRecord = nextPage.searchForRecord(key);
+        var pageIterator = pageProvider.iterator(fileChannel);
+        while (pageIterator.hasNext()) {
+            var page = pageIterator.next();
+            var entryRecord = page.searchForRecord(key);
             if (entryRecord != null) {
-                return new PageWithRecord(nextPage, entryRecord);
+                return new PageWithRecord(page, entryRecord);
             }
         }
         return null;
