@@ -94,6 +94,7 @@ class UnorderedHeapFile implements Store {
         }
     }
 
+    @Override
     public Object remove(Serializable key) throws IOException, ClassNotFoundException {
         try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
             ByteBuffer byteBuffer = ByteBuffer.allocate(pageSize);
