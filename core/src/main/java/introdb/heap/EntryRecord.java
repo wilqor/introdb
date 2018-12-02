@@ -5,6 +5,16 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
 
+/**
+ * Physical representation of {@link Entry} in {@link UnorderedHeapFile}.
+ *
+ * Byte structure:
+ * - serialized bytes of {@link Entry#value()}
+ * - serialized bytes of {@link Entry#key()}
+ * - size of both {@link Entry#value()} and {@link Entry#key()} as a short number
+ * - deleted boolean flag as a byte
+ * - end marker equal to {@link #END_MARKER}
+ */
 final class EntryRecord {
     private static final int DELETED_FLAG_BYTES = 1;
     private static final int ENTRY_SIZE_BYTES = (Short.SIZE / Byte.SIZE);
@@ -12,7 +22,7 @@ final class EntryRecord {
     private static final int META_DATA_BYTES = DELETED_FLAG_BYTES + ENTRY_SIZE_BYTES + END_MARKER_BYTES;
     private static final byte DELETED_TRUE = 1;
     private static final byte DELETED_FALSE = 0;
-    private static final byte END_MARKER = (byte) 255;
+    static final byte END_MARKER = (byte) 255;
     private static final int END_MARKER_NOT_FOUND_POSITION = -1;
 
     private final boolean deleted;
@@ -80,8 +90,8 @@ final class EntryRecord {
     private static byte[] bytesFromEntry(Entry entry) throws IOException {
         var byteOutStr = new ByteArrayOutputStream();
         var objOutStr = new ObjectOutputStream(byteOutStr);
-        objOutStr.writeObject(entry.key());
         objOutStr.writeObject(entry.value());
+        objOutStr.writeObject(entry.key());
         return byteOutStr.toByteArray();
     }
 
@@ -127,8 +137,8 @@ final class EntryRecord {
     private static Entry entryFromBytes(byte[] entryBytes) throws IOException, ClassNotFoundException {
         var byteInStr = new ByteArrayInputStream(entryBytes);
         var objInStr = new ObjectInputStream(byteInStr);
-        Serializable key = (Serializable) objInStr.readObject();
         Serializable value = (Serializable) objInStr.readObject();
+        Serializable key = (Serializable) objInStr.readObject();
         return new Entry(key, value);
     }
 }

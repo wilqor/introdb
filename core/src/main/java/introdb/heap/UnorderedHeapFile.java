@@ -20,16 +20,16 @@ class UnorderedHeapFile implements Store {
         try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
             var record = EntryRecord.fromEntry(entry);
             pageProvider.pageForAppending(fileChannel, record.recordSize())
-                    .appendRecord(record);
+                    .append(record);
         }
     }
 
     @Override
     public Object get(Serializable key) throws IOException, ClassNotFoundException {
-        try (FileChannel fileChannel = FileChannel.open(path)) {
+        try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ)) {
             var pageWithRecord = findPageWithRecord(fileChannel, key);
             if (pageWithRecord != null) {
-                return pageWithRecord.getRecord().entry().value();
+                return pageWithRecord.record().entry().value();
             }
             return null;
         }
@@ -40,7 +40,7 @@ class UnorderedHeapFile implements Store {
         try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
             var pageWithRecord = findAndDeleteRecord(fileChannel, key);
             if (pageWithRecord != null) {
-                return pageWithRecord.getRecord().entry().value();
+                return pageWithRecord.record().entry().value();
             }
             return null;
         }
@@ -49,7 +49,7 @@ class UnorderedHeapFile implements Store {
     private PageWithRecord findAndDeleteRecord(FileChannel fileChannel, Serializable key) throws IOException, ClassNotFoundException {
         var pageWithRecord = findPageWithRecord(fileChannel, key);
         if (pageWithRecord != null) {
-            pageWithRecord.getPage().deleteRecord(pageWithRecord.getRecord());
+            pageWithRecord.page().delete(pageWithRecord.record());
         }
         return pageWithRecord;
     }
@@ -58,7 +58,7 @@ class UnorderedHeapFile implements Store {
         var pageIterator = pageProvider.iterator(fileChannel);
         while (pageIterator.hasNext()) {
             var page = pageIterator.next();
-            var pageRecord = page.searchForRecord(key);
+            var pageRecord = page.search(key);
             if (pageRecord != null && pageRecord.notDeleted()) {
                 return new PageWithRecord(page, pageRecord);
             }
@@ -66,5 +66,30 @@ class UnorderedHeapFile implements Store {
         return null;
     }
 
+    static final class PageWithRecord {
+        private final RecordPage page;
+        private final PageRecord record;
+
+        PageWithRecord(RecordPage page, PageRecord record) {
+            this.page = page;
+            this.record = record;
+        }
+
+        RecordPage page() {
+            return page;
+        }
+
+        PageRecord record() {
+            return record;
+        }
+
+        @Override
+        public String toString() {
+            return "PageWithRecord{" +
+                    "page=" + page +
+                    ", record=" + record +
+                    '}';
+        }
+    }
 }
 

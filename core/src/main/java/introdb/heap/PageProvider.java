@@ -15,31 +15,32 @@ final class PageProvider {
         this.maxNrPages = maxNrPages;
     }
 
-    Iterator<EntryPage> iterator(FileChannel fileChannel) throws IOException {
+    Iterator<RecordPage> iterator(FileChannel fileChannel) throws IOException {
         long fileSize = validateFileSize(fileChannel);
         return new PageIterator(fileChannel, fileSize);
     }
 
-    EntryPage pageForAppending(FileChannel fileChannel, int recordSize) throws IOException {
+    RecordPage pageForAppending(FileChannel fileChannel, int recordSize) throws IOException {
         validateRecordSize(recordSize);
         long fileSize = validateFileSize(fileChannel);
         long pagesCount = fileSize / pageSize;
         if (pagesCount == 0) {
-            return new EntryPage(pageSize, fileChannel, ByteBuffer.allocate(pageSize), 0);
+            return new RecordPage(pageSize, fileChannel, ByteBuffer.allocate(pageSize), 0);
         } else {
             long lastPagePosition = fileSize - pageSize;
             ByteBuffer byteBuffer = ByteBuffer.allocate(pageSize);
             fileChannel.read(byteBuffer, lastPagePosition);
             int remainingSpace = EntryRecord.findRemainingSpace(byteBuffer, pageSize);
             if (remainingSpace >= recordSize) {
-                return new EntryPage(pageSize, fileChannel, byteBuffer, lastPagePosition);
+                return new RecordPage(pageSize, fileChannel, byteBuffer, lastPagePosition);
             } else {
                 validatePagesCount(pagesCount, maxNrPages);
-                return new EntryPage(pageSize, fileChannel, ByteBuffer.allocate(pageSize), fileSize);
+                return new RecordPage(pageSize, fileChannel, ByteBuffer.allocate(pageSize), fileSize);
             }
         }
     }
 
+    @SuppressWarnings("StatementWithEmptyBody")
     private void validatePagesCount(long pagesCount, int maxNrPages) {
         if (pagesCount == maxNrPages) {
             // not thrown to pass write tests
@@ -63,10 +64,10 @@ final class PageProvider {
         return fileSize;
     }
 
-    private class PageIterator implements Iterator<EntryPage> {
+    private class PageIterator implements Iterator<RecordPage> {
         private final FileChannel fileChannel;
         private long currentPosition;
-        private EntryPage currentPage;
+        private RecordPage currentPage;
 
         PageIterator(FileChannel fileChannel, long fileSize) {
             this.fileChannel = fileChannel;
@@ -79,7 +80,7 @@ final class PageProvider {
         }
 
         @Override
-        public EntryPage next() {
+        public RecordPage next() {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
@@ -87,7 +88,7 @@ final class PageProvider {
             try {
                 currentPosition -= pageSize;
                 fileChannel.read(byteBuffer, currentPosition);
-                currentPage = new EntryPage(pageSize, fileChannel, byteBuffer, currentPosition);
+                currentPage = new RecordPage(pageSize, fileChannel, byteBuffer, currentPosition);
                 return currentPage;
             } catch (IOException e) {
                 throw new RuntimeException("Error reading page of entries", e);
