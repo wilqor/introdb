@@ -90,8 +90,8 @@ final class EntryRecord {
     private static byte[] bytesFromEntry(Entry entry) throws IOException {
         var byteOutStr = new ByteArrayOutputStream();
         var objOutStr = new ObjectOutputStream(byteOutStr);
-        objOutStr.writeObject(entry.value());
         objOutStr.writeObject(entry.key());
+        objOutStr.writeObject(entry.value());
         return byteOutStr.toByteArray();
     }
 
@@ -115,7 +115,7 @@ final class EntryRecord {
         return END_MARKER_NOT_FOUND_POSITION;
     }
 
-    static PageRecord fromBuffer(ByteBuffer byteBuffer, int position) throws IOException, ClassNotFoundException {
+    static PartialEntryRecord partialFromBuffer(ByteBuffer byteBuffer, int position) throws IOException, ClassNotFoundException {
         int endMarkerPosition = findEndMarkerPosition(byteBuffer, position);
         if (endMarkerPosition == END_MARKER_NOT_FOUND_POSITION) {
             return null;
@@ -128,17 +128,54 @@ final class EntryRecord {
             byte[] bufferBytes = byteBuffer.array();
             int pageOffset = offset - entrySize;
             byte[] entryBytes = Arrays.copyOfRange(bufferBytes, pageOffset, offset);
-            Entry entry = entryFromBytes(entryBytes);
-            var entryRecord = new EntryRecord(deletedFlag == DELETED_TRUE, entryBytes, entry);
-            return new PageRecord(entryRecord, pageOffset);
+            return PartialEntryRecord.fromBytes(entryBytes, deletedFlag == DELETED_TRUE, pageOffset);
         }
     }
 
-    private static Entry entryFromBytes(byte[] entryBytes) throws IOException, ClassNotFoundException {
-        var byteInStr = new ByteArrayInputStream(entryBytes);
-        var objInStr = new ObjectInputStream(byteInStr);
-        var value = (Serializable) objInStr.readObject();
-        var key = (Serializable) objInStr.readObject();
-        return new Entry(key, value);
+    static final class PartialEntryRecord {
+        private final byte[] entryBytes;
+        private final boolean deleted;
+        private final int pageOffset;
+        private final ObjectInputStream objInStr;
+        private final Serializable key;
+
+        private PartialEntryRecord(byte[] entryBytes, boolean deleted, int pageOffset, ObjectInputStream objInStr, Serializable key) {
+            this.entryBytes = entryBytes;
+            this.deleted = deleted;
+            this.pageOffset = pageOffset;
+            this.objInStr = objInStr;
+            this.key = key;
+        }
+
+        Serializable key() {
+            return key;
+        }
+
+        int pageOffset() {
+            return pageOffset;
+        }
+
+        static PartialEntryRecord fromBytes(byte[] entryBytes, boolean deleted, int pageOffset) throws IOException, ClassNotFoundException {
+            var byteInStr = new ByteArrayInputStream(entryBytes);
+            var objInStr = new ObjectInputStream(byteInStr);
+            var key = (Serializable) objInStr.readObject();
+            return new PartialEntryRecord(entryBytes, deleted, pageOffset, objInStr, key);
+        }
+
+        PageRecord toRecord() throws IOException, ClassNotFoundException {
+            var value = (Serializable) objInStr.readObject();
+            var entry = new Entry(key, value);
+            var record = new EntryRecord(deleted, entryBytes, entry);
+            return new PageRecord(record, pageOffset);
+        }
+
+        @Override
+        public String toString() {
+            return "PartialEntryRecord{" +
+                    "deleted=" + deleted +
+                    ", pageOffset=" + pageOffset +
+                    ", key=" + key +
+                    '}';
+        }
     }
 }

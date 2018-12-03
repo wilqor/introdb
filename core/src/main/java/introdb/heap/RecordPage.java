@@ -37,12 +37,12 @@ class RecordPage {
 
     PageRecord search(Serializable key) throws IOException, ClassNotFoundException {
         byteBuffer.clear();
-        PageRecord currentRecord;
+        EntryRecord.PartialEntryRecord partial;
         int bufferPosition = pageSize;
-        while ((currentRecord = EntryRecord.fromBuffer(byteBuffer, bufferPosition)) != null) {
-            bufferPosition = currentRecord.pageOffset();
-            if (currentRecord.entry().key().equals(key)) {
-                return currentRecord;
+        while ((partial = EntryRecord.partialFromBuffer(byteBuffer, bufferPosition)) != null) {
+            bufferPosition = partial.pageOffset();
+            if (partial.key().equals(key)) {
+                return partial.toRecord();
             }
         }
         return null;
