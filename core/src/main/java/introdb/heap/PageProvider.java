@@ -10,7 +10,7 @@ final class PageProvider {
     private final int pageSize;
     private final int maxNrPages;
 
-    PageProvider(int pageSize, int maxNrPages) {
+    PageProvider(int maxNrPages, int pageSize) {
         this.pageSize = pageSize;
         this.maxNrPages = maxNrPages;
     }

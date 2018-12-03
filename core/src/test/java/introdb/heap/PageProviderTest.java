@@ -26,7 +26,7 @@ class PageProviderTest {
 
     @BeforeEach
     void setUp() {
-        pageProvider = new PageProvider(PAGE_SIZE, MAX_NR_PAGES);
+        pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE);
     }
 
     @Test

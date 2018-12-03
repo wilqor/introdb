@@ -12,7 +12,7 @@ class UnorderedHeapFile implements Store {
 
     UnorderedHeapFile(Path path, int maxNrPages, int pageSize) {
         this.path = path;
-        this.pageProvider = new PageProvider(pageSize, maxNrPages);
+        this.pageProvider = new PageProvider(maxNrPages, pageSize);
     }
 
     @Override

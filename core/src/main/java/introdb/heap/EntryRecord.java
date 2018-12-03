@@ -7,7 +7,7 @@ import java.util.Objects;
 
 /**
  * Physical representation of {@link Entry} in {@link UnorderedHeapFile}.
- *
+ * <p>
  * Byte structure:
  * - serialized bytes of {@link Entry#value()}
  * - serialized bytes of {@link Entry#key()}
@@ -129,7 +129,7 @@ final class EntryRecord {
             int pageOffset = offset - entrySize;
             byte[] entryBytes = Arrays.copyOfRange(bufferBytes, pageOffset, offset);
             Entry entry = entryFromBytes(entryBytes);
-            EntryRecord entryRecord = new EntryRecord(deletedFlag == DELETED_TRUE, entryBytes, entry);
+            var entryRecord = new EntryRecord(deletedFlag == DELETED_TRUE, entryBytes, entry);
             return new PageRecord(entryRecord, pageOffset);
         }
     }
@@ -137,8 +137,8 @@ final class EntryRecord {
     private static Entry entryFromBytes(byte[] entryBytes) throws IOException, ClassNotFoundException {
         var byteInStr = new ByteArrayInputStream(entryBytes);
         var objInStr = new ObjectInputStream(byteInStr);
-        Serializable value = (Serializable) objInStr.readObject();
-        Serializable key = (Serializable) objInStr.readObject();
+        var value = (Serializable) objInStr.readObject();
+        var key = (Serializable) objInStr.readObject();
         return new Entry(key, value);
     }
 }
