@@ -115,6 +115,15 @@ final class EntryRecord {
         return END_MARKER_NOT_FOUND_POSITION;
     }
 
+    static PageRecord fromBuffer(ByteBuffer byteBuffer, int position) throws IOException, ClassNotFoundException {
+        PartialEntryRecord partialEntryRecord = partialFromBuffer(byteBuffer, position);
+        if (partialEntryRecord == null) {
+            return null;
+        } else {
+            return partialEntryRecord.toRecord();
+        }
+    }
+
     static PartialEntryRecord partialFromBuffer(ByteBuffer byteBuffer, int position) throws IOException, ClassNotFoundException {
         int endMarkerPosition = findEndMarkerPosition(byteBuffer, position);
         if (endMarkerPosition == END_MARKER_NOT_FOUND_POSITION) {
