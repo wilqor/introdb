@@ -7,43 +7,41 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
 class UnorderedHeapFile implements Store {
-    private final Path path;
     private final PageProvider pageProvider;
+    private final FileChannel fileChannel;
 
     UnorderedHeapFile(Path path, int maxNrPages, int pageSize) {
-        this.path = path;
+        try {
+            this.fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ);
+        } catch (IOException e) {
+            throw new RuntimeException("Could not open file channel", e);
+        }
         this.pageProvider = new PageProvider(maxNrPages, pageSize);
     }
 
     @Override
     public void put(Entry entry) throws IOException {
-        try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
-            var record = EntryRecord.fromEntry(entry);
-            pageProvider.pageForAppending(fileChannel, record.recordSize())
-                    .append(record);
-        }
+        var record = EntryRecord.fromEntry(entry);
+        pageProvider.pageForAppending(fileChannel, record.recordSize())
+                .append(record);
     }
 
     @Override
     public Object get(Serializable key) throws IOException, ClassNotFoundException {
-        try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ)) {
-            var pageWithRecord = findPageWithRecord(fileChannel, key);
-            if (pageWithRecord != null) {
-                return pageWithRecord.record().entry().value();
-            }
-            return null;
+        var pageWithRecord = findPageWithRecord(fileChannel, key);
+        if (pageWithRecord != null) {
+            return pageWithRecord.record().entry().value();
         }
+        return null;
     }
 
     @Override
     public Object remove(Serializable key) throws IOException, ClassNotFoundException {
-        try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.READ)) {
-            var pageWithRecord = findAndDeleteRecord(fileChannel, key);
-            if (pageWithRecord != null) {
-                return pageWithRecord.record().entry().value();
-            }
-            return null;
+        var pageWithRecord = findAndDeleteRecord(fileChannel, key);
+        if (pageWithRecord != null) {
+            return pageWithRecord.record().entry().value();
         }
+        return null;
     }
 
     private PageWithRecord findAndDeleteRecord(FileChannel fileChannel, Serializable key) throws IOException, ClassNotFoundException {
