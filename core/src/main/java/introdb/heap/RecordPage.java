@@ -39,9 +39,10 @@ class RecordPage {
         byteBuffer.clear();
         EntryRecord.PartialEntryRecord partial;
         int bufferPosition = pageSize;
+        byte[] keyBytes = EntryRecord.keyToBytes(key);
         while ((partial = EntryRecord.partialFromBuffer(byteBuffer, bufferPosition)) != null) {
             bufferPosition = partial.pageOffset();
-            if (partial.key().equals(key)) {
+            if (partial.hasSameKey(keyBytes)) {
                 return partial.toRecord();
             }
         }

@@ -11,27 +11,31 @@ import java.util.Objects;
  * Byte structure:
  * - serialized bytes of {@link Entry#value()}
  * - serialized bytes of {@link Entry#key()}
- * - size of both {@link Entry#value()} and {@link Entry#key()} as a short number
+ * - size of {@link Entry#value()} as a short number
+ * - size of {@link Entry#key()} as a short number
  * - deleted boolean flag as a byte
  * - end marker equal to {@link #END_MARKER}
  */
 final class EntryRecord {
-    private static final int DELETED_FLAG_BYTES = 1;
-    private static final int ENTRY_SIZE_BYTES = (Short.SIZE / Byte.SIZE);
     private static final int END_MARKER_BYTES = 1;
-    private static final int META_DATA_BYTES = DELETED_FLAG_BYTES + ENTRY_SIZE_BYTES + END_MARKER_BYTES;
+    private static final int DELETED_FLAG_BYTES = 1;
+    private static final int KEY_SIZE_BYTES = (Short.SIZE / Byte.SIZE);
+    private static final int VALUE_SIZE_BYTES = (Short.SIZE / Byte.SIZE);
+    private static final int META_DATA_BYTES = END_MARKER_BYTES + DELETED_FLAG_BYTES + KEY_SIZE_BYTES + VALUE_SIZE_BYTES;
     private static final byte DELETED_TRUE = 1;
     private static final byte DELETED_FALSE = 0;
     static final byte END_MARKER = (byte) 255;
     private static final int END_MARKER_NOT_FOUND_POSITION = -1;
 
     private final boolean deleted;
-    private final byte[] entryBytes;
+    private final byte[] keyBytes;
+    private final byte[] valueBytes;
     private final Entry entry;
 
-    private EntryRecord(boolean deleted, byte[] entryBytes, Entry entry) {
+    private EntryRecord(boolean deleted, byte[] keyBytes, byte[] valueBytes, Entry entry) {
         this.deleted = deleted;
-        this.entryBytes = entryBytes;
+        this.keyBytes = keyBytes;
+        this.valueBytes = valueBytes;
         this.entry = entry;
     }
 
@@ -44,11 +48,11 @@ final class EntryRecord {
     }
 
     int recordSize() {
-        return META_DATA_BYTES + entryBytes.length;
+        return META_DATA_BYTES + keyBytes.length + valueBytes.length;
     }
 
     EntryRecord toDeleted() {
-        return new EntryRecord(true, entryBytes, entry);
+        return new EntryRecord(true, keyBytes, valueBytes, entry);
     }
 
     @Override
@@ -74,25 +78,39 @@ final class EntryRecord {
     }
 
     void writeToBuffer(ByteBuffer buffer, int position) {
-        for (int i = 0; i < entryBytes.length; i++) {
-            buffer.put(position + i, entryBytes[i]);
+        for (byte valueByte : valueBytes) {
+            buffer.put(position++, valueByte);
         }
-        buffer.put(position + entryBytes.length, deleted ? DELETED_TRUE : DELETED_FALSE)
-                .putShort(position + entryBytes.length + DELETED_FLAG_BYTES, (short) entryBytes.length)
-                .put(position + entryBytes.length + DELETED_FLAG_BYTES + ENTRY_SIZE_BYTES, END_MARKER);
+        for (byte keyByte : keyBytes) {
+            buffer.put(position++, keyByte);
+        }
+        buffer.putShort(position, (short) valueBytes.length)
+                .putShort(position + VALUE_SIZE_BYTES, (short) keyBytes.length)
+                .put(position + VALUE_SIZE_BYTES + KEY_SIZE_BYTES, deleted ? DELETED_TRUE : DELETED_FALSE)
+                .put(position + VALUE_SIZE_BYTES + KEY_SIZE_BYTES + DELETED_FLAG_BYTES, END_MARKER);
     }
 
     static EntryRecord fromEntry(Entry entry) throws IOException {
-        byte[] entryBytes = bytesFromEntry(entry);
-        return new EntryRecord(false, entryBytes, entry);
+        byte[] keyBytes = serialize(entry.key());
+        byte[] valueBytes = serialize(entry.value());
+        return new EntryRecord(false, keyBytes, valueBytes, entry);
     }
 
-    private static byte[] bytesFromEntry(Entry entry) throws IOException {
-        var byteOutStr = new ByteArrayOutputStream();
-        var objOutStr = new ObjectOutputStream(byteOutStr);
-        objOutStr.writeObject(entry.key());
-        objOutStr.writeObject(entry.value());
-        return byteOutStr.toByteArray();
+    static byte[] keyToBytes(Serializable key) throws IOException {
+        return serialize(key);
+    }
+
+    private static byte[] serialize(Serializable obj) throws IOException {
+        var outStr = new ByteArrayOutputStream();
+        var objOutStr = new ObjectOutputStream(outStr);
+        objOutStr.writeObject(obj);
+        return outStr.toByteArray();
+    }
+
+    private static Serializable deserialize(byte[] bytes) throws IOException, ClassNotFoundException {
+        var inStr = new ByteArrayInputStream(bytes);
+        var objInStr = new ObjectInputStream(inStr);
+        return (Serializable) objInStr.readObject();
     }
 
     static int findRemainingSpace(ByteBuffer byteBuffer, int pageSize) {
@@ -124,58 +142,58 @@ final class EntryRecord {
         }
     }
 
-    static PartialEntryRecord partialFromBuffer(ByteBuffer byteBuffer, int position) throws IOException, ClassNotFoundException {
+    static PartialEntryRecord partialFromBuffer(ByteBuffer byteBuffer, int position) {
         int endMarkerPosition = findEndMarkerPosition(byteBuffer, position);
         if (endMarkerPosition == END_MARKER_NOT_FOUND_POSITION) {
             return null;
         } else {
             int offset = endMarkerPosition;
-            offset -= ENTRY_SIZE_BYTES;
-            short entrySize = byteBuffer.getShort(offset);
             offset -= DELETED_FLAG_BYTES;
             byte deletedFlag = byteBuffer.get(offset);
+            offset -= KEY_SIZE_BYTES;
+            short keySize = byteBuffer.getShort(offset);
+            offset -= VALUE_SIZE_BYTES;
+            short valueSize = byteBuffer.getShort(offset);
             byte[] bufferBytes = byteBuffer.array();
-            int pageOffset = offset - entrySize;
-            byte[] entryBytes = Arrays.copyOfRange(bufferBytes, pageOffset, offset);
-            return PartialEntryRecord.fromBytes(entryBytes, deletedFlag == DELETED_TRUE, pageOffset);
+            byte[] keyBytes = Arrays.copyOfRange(bufferBytes, offset - keySize, offset);
+            offset -= keySize;
+            byte[] valueBytes = Arrays.copyOfRange(bufferBytes, offset - valueSize, offset);
+            int pageOffset = offset - valueSize;
+            return PartialEntryRecord.fromBytes(keyBytes, valueBytes, deletedFlag == DELETED_TRUE, pageOffset);
         }
     }
 
     static final class PartialEntryRecord {
-        private final byte[] entryBytes;
+        private final byte[] keyBytes;
+        private final byte[] valueBytes;
         private final boolean deleted;
         private final int pageOffset;
-        private final ObjectInputStream objInStr;
-        private final Serializable key;
 
-        private PartialEntryRecord(byte[] entryBytes, boolean deleted, int pageOffset, ObjectInputStream objInStr, Serializable key) {
-            this.entryBytes = entryBytes;
+        private PartialEntryRecord(byte[] keyBytes, byte[] valueBytes, boolean deleted, int pageOffset) {
+            this.keyBytes = keyBytes;
+            this.valueBytes = valueBytes;
             this.deleted = deleted;
             this.pageOffset = pageOffset;
-            this.objInStr = objInStr;
-            this.key = key;
-        }
-
-        Serializable key() {
-            return key;
         }
 
         int pageOffset() {
             return pageOffset;
         }
 
-        static PartialEntryRecord fromBytes(byte[] entryBytes, boolean deleted, int pageOffset) throws IOException, ClassNotFoundException {
-            var byteInStr = new ByteArrayInputStream(entryBytes);
-            var objInStr = new ObjectInputStream(byteInStr);
-            var key = (Serializable) objInStr.readObject();
-            return new PartialEntryRecord(entryBytes, deleted, pageOffset, objInStr, key);
+        static PartialEntryRecord fromBytes(byte[] keyBytes, byte[] valueBytes, boolean deleted, int pageOffset) {
+            return new PartialEntryRecord(keyBytes, valueBytes, deleted, pageOffset);
         }
 
         PageRecord toRecord() throws IOException, ClassNotFoundException {
-            var value = (Serializable) objInStr.readObject();
+            var key = deserialize(keyBytes);
+            var value = deserialize(valueBytes);
             var entry = new Entry(key, value);
-            var record = new EntryRecord(deleted, entryBytes, entry);
+            var record = new EntryRecord(deleted, keyBytes, valueBytes, entry);
             return new PageRecord(record, pageOffset);
+        }
+
+        boolean hasSameKey(byte[] keyBytes) {
+            return Arrays.equals(this.keyBytes, keyBytes);
         }
 
         @Override
@@ -183,7 +201,6 @@ final class EntryRecord {
             return "PartialEntryRecord{" +
                     "deleted=" + deleted +
                     ", pageOffset=" + pageOffset +
-                    ", key=" + key +
                     '}';
         }
     }

@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class EntryRecordTest {
 
     private ByteBuffer byteBuffer;
-    
+
     @BeforeEach
     void setUp() {
         byteBuffer = ByteBuffer.allocate(4 * 1024);
@@ -21,7 +21,7 @@ class EntryRecordTest {
     @Test
     void from_buffer_returns_null_when_buffer_empty() throws IOException, ClassNotFoundException {
         PageRecord pageRecord = fromBuffer(byteBuffer, byteBuffer.capacity());
-        
+
         assertNull(pageRecord);
     }
 
