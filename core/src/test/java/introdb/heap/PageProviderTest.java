@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,8 +15,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.*;
 
 class PageProviderTest {
 
@@ -113,7 +113,27 @@ class PageProviderTest {
 
             assertEquals(expectedFileOffsets, actualPageOffsets);
         }
+    }
 
+    @Test
+    void saves_page() throws Exception {
+        try (var file = new MockFile(0)) {
+            var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
+
+            byte[] dummyPageBytes = new byte[PAGE_SIZE];
+            int dummyPageRecordLength = 1024;
+            dummyPageBytes[dummyPageRecordLength - 1] = EntryRecord.END_MARKER;
+            ByteBuffer buffer = ByteBuffer.wrap(dummyPageBytes);
+            buffer.put(dummyPageBytes);
+            RecordPage recordPage = new RecordPage(PAGE_SIZE, buffer, 0);
+            pageProvider.save(recordPage);
+            Iterator<RecordPage> iterator = pageProvider.iterator();
+
+            assertTrue(iterator.hasNext());
+            RecordPage resultPage = iterator.next();
+            byte[] resultBytes = resultPage.buffer().array();
+            assertArrayEquals(dummyPageBytes, resultBytes);
+        }
     }
 
     private static final class MockFile implements AutoCloseable {

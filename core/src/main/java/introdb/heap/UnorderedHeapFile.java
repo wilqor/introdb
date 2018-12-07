@@ -21,8 +21,9 @@ class UnorderedHeapFile implements Store {
     @Override
     public void put(Entry entry) throws IOException {
         var record = EntryRecord.fromEntry(entry);
-        pageProvider.pageForAppending(record.recordSize())
-                .append(record);
+        var page = pageProvider.pageForAppending(record.recordSize());
+        page.append(record);
+        pageProvider.save(page);
     }
 
     @Override
@@ -46,7 +47,9 @@ class UnorderedHeapFile implements Store {
     private PageWithRecord findAndDeleteRecord(Serializable key) throws IOException, ClassNotFoundException {
         var pageWithRecord = findPageWithRecord(key);
         if (pageWithRecord != null) {
-            pageWithRecord.page().delete(pageWithRecord.record());
+            var page = pageWithRecord.page();
+            page.delete(pageWithRecord.record());
+            pageProvider.save(page);
         }
         return pageWithRecord;
     }

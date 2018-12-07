@@ -10,36 +10,46 @@ final class PageProvider {
     private final int pageSize;
     private final int maxNrPages;
     private final FileChannel fileChannel;
+    private long fileSize;
 
     PageProvider(int maxNrPages, int pageSize, FileChannel fileChannel) throws IOException {
         this.pageSize = pageSize;
         this.maxNrPages = maxNrPages;
         this.fileChannel = fileChannel;
-        validateFileSize(fileChannel);
+        this.fileSize = validateFileSize(fileChannel);
     }
 
-    Iterator<RecordPage> iterator() throws IOException {
-        long fileSize = fileChannel.size();
+    Iterator<RecordPage> iterator() {
         return new PageIterator(fileSize);
     }
 
     RecordPage pageForAppending(int recordSize) throws IOException {
         validateRecordSize(recordSize);
-        long fileSize = validateFileSize(fileChannel);
         long pagesCount = fileSize / pageSize;
         if (pagesCount == 0) {
-            return new RecordPage(pageSize, fileChannel, ByteBuffer.allocate(pageSize), 0);
+            return new RecordPage(pageSize, ByteBuffer.allocate(pageSize), 0);
         } else {
             long lastPagePosition = fileSize - pageSize;
             ByteBuffer byteBuffer = ByteBuffer.allocate(pageSize);
             fileChannel.read(byteBuffer, lastPagePosition);
             int remainingSpace = EntryRecord.findRemainingSpace(byteBuffer, pageSize);
             if (remainingSpace >= recordSize) {
-                return new RecordPage(pageSize, fileChannel, byteBuffer, lastPagePosition);
+                return new RecordPage(pageSize, byteBuffer, lastPagePosition);
             } else {
                 validatePagesCount(pagesCount, maxNrPages);
-                return new RecordPage(pageSize, fileChannel, ByteBuffer.allocate(pageSize), fileSize);
+                return new RecordPage(pageSize, ByteBuffer.allocate(pageSize), fileSize);
             }
+        }
+    }
+
+    void save(RecordPage recordPage) throws IOException {
+        ByteBuffer buffer = recordPage.buffer();
+        buffer.clear();
+        long fileOffset = recordPage.fileOffset();
+        fileChannel.write(buffer, fileOffset);
+        boolean newPage = fileOffset == fileSize;
+        if (newPage) {
+            fileSize += pageSize;
         }
     }
 
@@ -58,13 +68,13 @@ final class PageProvider {
     }
 
     private long validateFileSize(FileChannel fileChannel) throws IOException {
-        long fileSize = fileChannel.size();
-        if (fileSize != 0 && fileSize % pageSize != 0) {
+        long size = fileChannel.size();
+        if (size != 0 && size % pageSize != 0) {
             throw new IllegalArgumentException(String.format("File of size: %d not divided into pages of size: %d",
-                    fileSize,
+                    size,
                     pageSize));
         }
-        return fileSize;
+        return size;
     }
 
     private class PageIterator implements Iterator<RecordPage> {
@@ -88,7 +98,7 @@ final class PageProvider {
             try {
                 currentPosition -= pageSize;
                 fileChannel.read(byteBuffer, currentPosition);
-                return new RecordPage(pageSize, fileChannel, byteBuffer, currentPosition);
+                return new RecordPage(pageSize, byteBuffer, currentPosition);
             } catch (IOException e) {
                 throw new RuntimeException("Error reading page of entries", e);
             }

@@ -33,7 +33,6 @@ class RecordPageTest {
         byteBuffer.position(PAGE_SIZE);
         recordPage = new RecordPage(
                 PAGE_SIZE,
-                fileChannel,
                 byteBuffer,
                 FILE_OFFSET
         );
@@ -105,20 +104,5 @@ class RecordPageTest {
         assertTrue(!foundAfterDeletion.notDeleted());
         assertEquals("record 1", foundAfterDeletion.entry().key());
         assertEquals("content 1", foundAfterDeletion.entry().value());
-    }
-
-    @Test
-    void persists_changes_in_file() throws IOException, ClassNotFoundException {
-        EntryRecord record1 = EntryRecord.fromEntry(new Entry("record 1", "content 1"));
-        EntryRecord record2 = EntryRecord.fromEntry(new Entry("record 2", "content 2"));
-
-        recordPage.append(record1);
-        recordPage.append(record2);
-        PageRecord pageRecord1 = recordPage.search(record2.entry().key());
-        recordPage.delete(pageRecord1);
-        ByteBuffer bufferAfterChanges = ByteBuffer.allocate(PAGE_SIZE);
-        fileChannel.read(bufferAfterChanges, recordPage.fileOffset());
-
-        assertArrayEquals(byteBuffer.array(), bufferAfterChanges.array());
     }
 }
