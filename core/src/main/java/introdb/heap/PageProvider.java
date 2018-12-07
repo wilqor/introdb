@@ -9,18 +9,21 @@ import java.util.NoSuchElementException;
 final class PageProvider {
     private final int pageSize;
     private final int maxNrPages;
+    private final FileChannel fileChannel;
 
-    PageProvider(int maxNrPages, int pageSize) {
+    PageProvider(int maxNrPages, int pageSize, FileChannel fileChannel) throws IOException {
         this.pageSize = pageSize;
         this.maxNrPages = maxNrPages;
+        this.fileChannel = fileChannel;
+        validateFileSize(fileChannel);
     }
 
-    Iterator<RecordPage> iterator(FileChannel fileChannel) throws IOException {
-        long fileSize = validateFileSize(fileChannel);
-        return new PageIterator(fileChannel, fileSize);
+    Iterator<RecordPage> iterator() throws IOException {
+        long fileSize = fileChannel.size();
+        return new PageIterator(fileSize);
     }
 
-    RecordPage pageForAppending(FileChannel fileChannel, int recordSize) throws IOException {
+    RecordPage pageForAppending(int recordSize) throws IOException {
         validateRecordSize(recordSize);
         long fileSize = validateFileSize(fileChannel);
         long pagesCount = fileSize / pageSize;
@@ -65,12 +68,9 @@ final class PageProvider {
     }
 
     private class PageIterator implements Iterator<RecordPage> {
-        private final FileChannel fileChannel;
         private long currentPosition;
-        private RecordPage currentPage;
 
-        PageIterator(FileChannel fileChannel, long fileSize) {
-            this.fileChannel = fileChannel;
+        PageIterator(long fileSize) {
             this.currentPosition = fileSize;
         }
 
@@ -88,8 +88,7 @@ final class PageProvider {
             try {
                 currentPosition -= pageSize;
                 fileChannel.read(byteBuffer, currentPosition);
-                currentPage = new RecordPage(pageSize, fileChannel, byteBuffer, currentPosition);
-                return currentPage;
+                return new RecordPage(pageSize, fileChannel, byteBuffer, currentPosition);
             } catch (IOException e) {
                 throw new RuntimeException("Error reading page of entries", e);
             }

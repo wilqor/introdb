@@ -1,6 +1,5 @@
 package introdb.heap;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -22,25 +21,23 @@ class PageProviderTest {
 
     private static final int PAGE_SIZE = 4 * 1024;
     private static final int MAX_NR_PAGES = 10;
-    private PageProvider pageProvider;
-
-    @BeforeEach
-    void setUp() {
-        pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE);
-    }
 
     @Test
     void validates_file_size_divisible_by_page_size() throws Exception {
         try (var file = new MockFile(PAGE_SIZE * 3 / 2)) {
-            assertThatThrownBy(() -> pageProvider.pageForAppending(file.channel(), 1024))
-                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> {
+                var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
+                pageProvider.pageForAppending(1024);
+            }).isInstanceOf(IllegalArgumentException.class);
         }
     }
 
     @Test
     void validates_record_size_fitting_in_page_size() throws Exception {
         try (var file = new MockFile(PAGE_SIZE * 10)) {
-            assertThatThrownBy(() -> pageProvider.pageForAppending(file.channel(), PAGE_SIZE * 2))
+            var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
+
+            assertThatThrownBy(() -> pageProvider.pageForAppending(PAGE_SIZE * 2))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }
@@ -49,7 +46,9 @@ class PageProviderTest {
     @Disabled("not thrown to pass write performance tests")
     void validates_max_pages_count_in_file() throws Exception {
         try (var file = new MockFile(PAGE_SIZE * MAX_NR_PAGES, PAGE_SIZE)) {
-            assertThatThrownBy(() -> pageProvider.pageForAppending(file.channel(), 1024))
+            var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
+
+            assertThatThrownBy(() -> pageProvider.pageForAppending(1024))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }
@@ -57,7 +56,9 @@ class PageProviderTest {
     @Test
     void finds_file_start_for_appending_page_when_file_empty() throws Exception {
         try (var file = new MockFile(0)) {
-            RecordPage recordPage = pageProvider.pageForAppending(file.channel(), 1024);
+            var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
+
+            RecordPage recordPage = pageProvider.pageForAppending(1024);
 
             assertEquals(0, recordPage.fileOffset());
         }
@@ -67,7 +68,9 @@ class PageProviderTest {
     void finds_file_end_for_appending_page_when_file_full() throws Exception {
         long fileLength = 4 * PAGE_SIZE;
         try (var file = new MockFile(fileLength, fileLength - 1)) {
-            RecordPage recordPage = pageProvider.pageForAppending(file.channel(), 1024);
+            var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
+
+            RecordPage recordPage = pageProvider.pageForAppending(1024);
 
             assertEquals(fileLength, recordPage.fileOffset());
         }
@@ -78,7 +81,9 @@ class PageProviderTest {
         long fileLength = 4 * PAGE_SIZE;
         long endMarkerPosition = PAGE_SIZE / 2;
         try (var file = new MockFile(fileLength, endMarkerPosition)) {
-            RecordPage recordPage = pageProvider.pageForAppending(file.channel(), 1024);
+            var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
+
+            RecordPage recordPage = pageProvider.pageForAppending(1024);
 
             assertEquals(fileLength - PAGE_SIZE, recordPage.fileOffset());
         }
@@ -87,7 +92,9 @@ class PageProviderTest {
     @Test
     void provides_empty_iterator_for_empty_file() throws Exception {
         try (var file = new MockFile(0)) {
-            Iterator<RecordPage> iterator = pageProvider.iterator(file.channel());
+            var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
+
+            Iterator<RecordPage> iterator = pageProvider.iterator();
 
             assertFalse(iterator.hasNext());
         }
@@ -97,7 +104,9 @@ class PageProviderTest {
     void iterates_pages_backward() throws Exception {
         long pagesCount = 3;
         try (var file = new MockFile(pagesCount * PAGE_SIZE)) {
-            Iterator<RecordPage> iterator = pageProvider.iterator(file.channel());
+            var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
+
+            Iterator<RecordPage> iterator = pageProvider.iterator();
             List<Long> expectedFileOffsets = List.of(2L * PAGE_SIZE, (long) PAGE_SIZE, 0L);
             List<Long> actualPageOffsets = new ArrayList<>();
             iterator.forEachRemaining(recordPage -> actualPageOffsets.add(recordPage.fileOffset()));

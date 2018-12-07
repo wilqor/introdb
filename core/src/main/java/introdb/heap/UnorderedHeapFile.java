@@ -8,27 +8,26 @@ import java.nio.file.StandardOpenOption;
 
 class UnorderedHeapFile implements Store {
     private final PageProvider pageProvider;
-    private final FileChannel fileChannel;
 
     UnorderedHeapFile(Path path, int maxNrPages, int pageSize) {
         try {
-            this.fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ);
+            FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ);
+            this.pageProvider = new PageProvider(maxNrPages, pageSize, fileChannel);
         } catch (IOException e) {
-            throw new RuntimeException("Could not open file channel", e);
+            throw new RuntimeException(e);
         }
-        this.pageProvider = new PageProvider(maxNrPages, pageSize);
     }
 
     @Override
     public void put(Entry entry) throws IOException {
         var record = EntryRecord.fromEntry(entry);
-        pageProvider.pageForAppending(fileChannel, record.recordSize())
+        pageProvider.pageForAppending(record.recordSize())
                 .append(record);
     }
 
     @Override
     public Object get(Serializable key) throws IOException, ClassNotFoundException {
-        var pageWithRecord = findPageWithRecord(fileChannel, key);
+        var pageWithRecord = findPageWithRecord(key);
         if (pageWithRecord != null) {
             return pageWithRecord.record().entry().value();
         }
@@ -37,23 +36,23 @@ class UnorderedHeapFile implements Store {
 
     @Override
     public Object remove(Serializable key) throws IOException, ClassNotFoundException {
-        var pageWithRecord = findAndDeleteRecord(fileChannel, key);
+        var pageWithRecord = findAndDeleteRecord(key);
         if (pageWithRecord != null) {
             return pageWithRecord.record().entry().value();
         }
         return null;
     }
 
-    private PageWithRecord findAndDeleteRecord(FileChannel fileChannel, Serializable key) throws IOException, ClassNotFoundException {
-        var pageWithRecord = findPageWithRecord(fileChannel, key);
+    private PageWithRecord findAndDeleteRecord(Serializable key) throws IOException, ClassNotFoundException {
+        var pageWithRecord = findPageWithRecord(key);
         if (pageWithRecord != null) {
             pageWithRecord.page().delete(pageWithRecord.record());
         }
         return pageWithRecord;
     }
 
-    private PageWithRecord findPageWithRecord(FileChannel fileChannel, Serializable key) throws IOException, ClassNotFoundException {
-        var pageIterator = pageProvider.iterator(fileChannel);
+    private PageWithRecord findPageWithRecord(Serializable key) throws IOException, ClassNotFoundException {
+        var pageIterator = pageProvider.iterator();
         while (pageIterator.hasNext()) {
             var page = pageIterator.next();
             var pageRecord = page.search(key);
