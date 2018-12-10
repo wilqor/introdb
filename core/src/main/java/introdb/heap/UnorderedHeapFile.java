@@ -7,15 +7,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
 class UnorderedHeapFile implements Store {
-    private static final int MAX_CACHED_ENTRIES = 10;
     private final PageProvider pageProvider;
-    private final Cache<Serializable, Entry> entryReadCache;
 
     UnorderedHeapFile(Path path, int maxNrPages, int pageSize) {
         try {
             FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ);
             this.pageProvider = new PageProvider(maxNrPages, pageSize, fileChannel);
-            this.entryReadCache = new Cache<>(MAX_CACHED_ENTRIES);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -27,14 +24,12 @@ class UnorderedHeapFile implements Store {
         var page = pageProvider.pageForAppending(record.recordSize());
         page.append(record);
         pageProvider.save(page);
-        entryReadCache.put(record.entry().key(), record.entry());
     }
 
     @Override
     public Object get(Serializable key) throws IOException, ClassNotFoundException {
         var entry = findEntry(key);
         if (entry != null) {
-            entryReadCache.put(key, entry);
             return entry.value();
         }
         return null;
@@ -55,7 +50,6 @@ class UnorderedHeapFile implements Store {
             var page = pageWithRecord.page();
             page.delete(pageWithRecord.record());
             pageProvider.save(page);
-            entryReadCache.invalidate(key);
         }
         return pageWithRecord;
     }
@@ -73,10 +67,6 @@ class UnorderedHeapFile implements Store {
     }
 
     private Entry findEntry(Serializable key) throws IOException, ClassNotFoundException {
-        Entry cachedEntry = entryReadCache.get(key);
-        if (cachedEntry != null) {
-            return cachedEntry;
-        }
         var pageIterator = pageProvider.iterator();
         while (pageIterator.hasNext()) {
             var page = pageIterator.next();
