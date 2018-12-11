@@ -67,27 +67,10 @@ public class ObjectPool<T> {
 				future.complete(object);
 			} else {
 				objectPool.offer(object);
-				long currentState;
-				long newState;
-				do {
-					currentState = poolState.get();
-					int inUse = (int) (currentState >> 32);
-					int inPool = (int) currentState;
-					inUse--;
-					newState = (long) inUse << 32 | inPool & 0xFFFFFFFFL;
-				} while (currentState != poolState.getAndSet(newState));
+				tryToReturn();
 			}
 		} else {
-			long currentState;
-			long newState;
-			do {
-				currentState = poolState.get();
-				int inUse = (int) (currentState >> 32);
-				int inPool = (int) currentState;
-				inUse--;
-				inPool--;
-				newState = (long) inUse << 32 | inPool & 0xFFFFFFFFL;
-			} while (currentState != poolState.getAndSet(newState));
+			tryToInvalidate();
 		}
 	}
 
@@ -139,6 +122,31 @@ public class ObjectPool<T> {
 			newState = (long) inUse << 32 | inPool & 0xFFFFFFFFL;
 		} while (currentState != poolState.getAndSet(newState));
 		return growPool;
+	}
+
+	private void tryToInvalidate() {
+		long currentState;
+		long newState;
+		do {
+			currentState = poolState.get();
+			int inUse = (int) (currentState >> 32);
+			int inPool = (int) currentState;
+			inUse--;
+			inPool--;
+			newState = (long) inUse << 32 | inPool & 0xFFFFFFFFL;
+		} while (currentState != poolState.getAndSet(newState));
+	}
+
+	private void tryToReturn() {
+		long currentState;
+		long newState;
+		do {
+			currentState = poolState.get();
+			int inUse = (int) (currentState >> 32);
+			int inPool = (int) currentState;
+			inUse--;
+			newState = (long) inUse << 32 | inPool & 0xFFFFFFFFL;
+		} while (currentState != poolState.getAndSet(newState));
 	}
 
 }
