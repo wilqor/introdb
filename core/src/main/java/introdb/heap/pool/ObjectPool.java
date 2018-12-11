@@ -6,11 +6,16 @@ public class ObjectPool<T> {
 
 	private final ObjectFactory<T> fcty;
 	private final ObjectValidator<T> validator;
-	private int maxPoolSize = 25;
+	private final int maxPoolSize;
 
 	public ObjectPool(ObjectFactory<T> fcty, ObjectValidator<T> validator) {
+		this(fcty,validator,25);
+	}
+	
+	public ObjectPool(ObjectFactory<T> fcty, ObjectValidator<T> validator, int maxPoolSize) {
 		this.fcty = fcty;
 		this.validator = validator;
+		this.maxPoolSize = maxPoolSize;
 	}
 	
 	/**
@@ -28,6 +33,14 @@ public class ObjectPool<T> {
 	}
 
 	public void shutdown() throws InterruptedException {
+	}
+
+	public int getPoolSize() {
+		return 0;
+	}
+
+	public int getInUse() {
+		return 0;
 	}
 
 }
