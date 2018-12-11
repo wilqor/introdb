@@ -30,7 +30,14 @@ public class ObjectPool<T> {
 		this.validator = validator;
 		this.maxPoolSize = maxPoolSize;
 	}
-
+	
+	/**
+	 * When there is object in pool returns completed future,
+	 * if not, future will be completed when object is
+	 * returned to the pool.
+	 * 
+	 * @return
+	 */
 	public CompletableFuture<T> borrowObject() {
 
 		// fast path, in case there is object in pool, return it immediately
@@ -78,6 +85,14 @@ public class ObjectPool<T> {
 	public void shutdown() throws InterruptedException {
 		waitingTasks.shutdown();
 		waitingTasks.awaitTermination(10, TimeUnit.SECONDS);
+	}
+
+	public int getPoolSize() {
+		return 0;
+	}
+
+	public int getInUse() {
+		return 0;
 	}
 
 	private T tryToBorrow() {
