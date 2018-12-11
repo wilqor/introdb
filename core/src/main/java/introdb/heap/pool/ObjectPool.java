@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class ObjectPool<T> {
 
-	private final ConcurrentLinkedDeque<T> objectPool = new ConcurrentLinkedDeque<>();	
+	private final ConcurrentLinkedDeque<T> objectPool = new ConcurrentLinkedDeque<>();
 	private final ConcurrentLinkedDeque<CompletableFuture<T>> borrowObjectTasks = new ConcurrentLinkedDeque<>();
 	private final ExecutorService waitingTasks = Executors.newFixedThreadPool(64);
 
@@ -22,19 +22,18 @@ public class ObjectPool<T> {
 	private final int maxPoolSize;
 
 	public ObjectPool(ObjectFactory<T> fcty, ObjectValidator<T> validator) {
-		this(fcty,validator,25);
+		this(fcty, validator, 25);
 	}
-	
+
 	public ObjectPool(ObjectFactory<T> fcty, ObjectValidator<T> validator, int maxPoolSize) {
 		this.fcty = fcty;
 		this.validator = validator;
 		this.maxPoolSize = maxPoolSize;
 	}
-	
+
 	/**
-	 * When there is object in pool returns completed future,
-	 * if not, future will be completed when object is
-	 * returned to the pool.
+	 * When there is object in pool returns completed future, if not, future will be
+	 * completed when object is returned to the pool.
 	 * 
 	 * @return
 	 */
@@ -58,8 +57,8 @@ public class ObjectPool<T> {
 		CompletableFuture<T> future = new CompletableFuture<>();
 		borrowObjectTasks.offer(future);
 		return future;
-	}	
-	
+	}
+
 	public void returnObject(T object) {
 		if (validator.validate(object)) {
 			// piggyback, on release check if there is any task waiting for object
@@ -88,11 +87,13 @@ public class ObjectPool<T> {
 	}
 
 	public int getPoolSize() {
-		return 0;
+		long currentState = poolState.get();
+		return (int) currentState;
 	}
 
 	public int getInUse() {
-		return 0;
+		long currentState = poolState.get();
+		return (int) (currentState >> 32);
 	}
 
 	private T tryToBorrow() {
@@ -110,7 +111,7 @@ public class ObjectPool<T> {
 		}
 		return object;
 	}
-	
+
 	private boolean tryToGrow() {
 		long newState;
 		long currentState;
