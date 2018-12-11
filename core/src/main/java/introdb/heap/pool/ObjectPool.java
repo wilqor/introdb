@@ -19,13 +19,18 @@ public class ObjectPool<T> {
 
 	private final ObjectFactory<T> fcty;
 	private final ObjectValidator<T> validator;
-	private int maxPoolSize = 25;
+	private final int maxPoolSize;
 
 	public ObjectPool(ObjectFactory<T> fcty, ObjectValidator<T> validator) {
-		this.fcty = fcty;
-		this.validator = validator;
+		this(fcty,validator,25);
 	}
 	
+	public ObjectPool(ObjectFactory<T> fcty, ObjectValidator<T> validator, int maxPoolSize) {
+		this.fcty = fcty;
+		this.validator = validator;
+		this.maxPoolSize = maxPoolSize;
+	}
+
 	public CompletableFuture<T> borrowObject() {
 
 		// fast path, in case there is object in pool, return it immediately
