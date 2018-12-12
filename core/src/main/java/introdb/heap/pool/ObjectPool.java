@@ -3,7 +3,7 @@ package introdb.heap.pool;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -11,9 +11,9 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class ObjectPool<T> {
 
-	private final ConcurrentLinkedDeque<T> objectPool = new ConcurrentLinkedDeque<>();
-	private final ConcurrentLinkedDeque<CompletableFuture<T>> borrowObjectTasks = new ConcurrentLinkedDeque<>();
-	private final ExecutorService waitingTasks = Executors.newFixedThreadPool(64);
+	private final ConcurrentLinkedQueue<T> objectPool = new ConcurrentLinkedQueue<>();
+	private final ConcurrentLinkedQueue<CompletableFuture<T>> borrowObjectTasks = new ConcurrentLinkedQueue<>();
+	private final ExecutorService waitingTasks = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
 	private final AtomicLong poolState = new AtomicLong(0);
 
