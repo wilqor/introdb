@@ -15,7 +15,7 @@ class ObjectPoolTest {
 	private ObjectPool<Object> objectPool;
 
 	@AfterEach
-	public void tearDown() throws Exception {
+	void tearDown() throws Exception {
 		objectPool.shutdown();
 	}
 

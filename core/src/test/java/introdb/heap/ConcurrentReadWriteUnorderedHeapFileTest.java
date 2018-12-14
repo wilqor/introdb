@@ -42,7 +42,7 @@ public class ConcurrentReadWriteUnorderedHeapFileTest {
 	private ExecutorService executors;
 
 	@BeforeEach
-	public void setUp() throws IOException {
+	void setUp() throws IOException {
 		heapFilePath = Files.createTempFile("heap", "0001");
 		heapFile = new UnorderedHeapFile(heapFilePath, MAX_NR_PAGES, PAGE_SIZE);
 
@@ -50,7 +50,7 @@ public class ConcurrentReadWriteUnorderedHeapFileTest {
 	}
 
 	@AfterEach
-	public void tearDown() throws IOException, InterruptedException {
+	void tearDown() throws IOException, InterruptedException {
 		Files.delete(heapFilePath);
 		
 		executors.shutdown();
@@ -60,7 +60,7 @@ public class ConcurrentReadWriteUnorderedHeapFileTest {
 
 	@Test
 	@Tag("slow")
-	public void concurrentReadWrite() throws Exception {
+	void concurrentReadWrite() throws Exception {
 
 		writersLatch = new CountDownLatch(nrOfWriters);		
 		
@@ -77,6 +77,7 @@ public class ConcurrentReadWriteUnorderedHeapFileTest {
 		// wait for readers to complete
 		CompletableFuture.allOf(ws.toArray(new CompletableFuture[ws.size()])).get(5,TimeUnit.MINUTES);
 
+		
 		// wait for writers to complete
 		CompletableFuture.allOf(rs.toArray(new CompletableFuture[rs.size()])).get(5,TimeUnit.MINUTES);
 		
