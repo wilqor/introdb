@@ -17,10 +17,8 @@ import static org.junit.Assert.*;
 class RecordPageTest {
 
     private static final int PAGE_SIZE = 4 * 1024;
-    private static final int FILE_OFFSET = 8 * 1024;
     private FileChannel fileChannel;
     private Path pageFilePath;
-    private ByteBuffer byteBuffer;
 
     private RecordPage recordPage;
 
@@ -28,14 +26,10 @@ class RecordPageTest {
     void setUp() throws IOException {
         pageFilePath = Files.createTempFile("page", ".suffix");
         fileChannel = FileChannel.open(pageFilePath, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ);
-        byteBuffer = ByteBuffer.allocate(PAGE_SIZE);
+        ByteBuffer byteBuffer = ByteBuffer.allocate(PAGE_SIZE);
         byteBuffer.limit(PAGE_SIZE);
         byteBuffer.position(PAGE_SIZE);
-        recordPage = new RecordPage(
-                PAGE_SIZE,
-                byteBuffer,
-                FILE_OFFSET
-        );
+        recordPage = new RecordPage(PAGE_SIZE, byteBuffer, 1);
     }
 
     @AfterEach

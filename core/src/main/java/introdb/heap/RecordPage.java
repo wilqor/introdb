@@ -7,20 +7,20 @@ import java.nio.ByteBuffer;
 class RecordPage {
     private final int pageSize;
     private final ByteBuffer byteBuffer;
-    private final long fileOffset;
+    private final int pageNumber;
 
-    RecordPage(int pageSize, ByteBuffer byteBuffer, long fileOffset) {
+    RecordPage(int pageSize, ByteBuffer byteBuffer, int pageNumber) {
         this.pageSize = pageSize;
         this.byteBuffer = byteBuffer;
-        this.fileOffset = fileOffset;
+        this.pageNumber = pageNumber;
     }
 
     ByteBuffer buffer() {
         return byteBuffer;
     }
 
-    long fileOffset() {
-        return fileOffset;
+    int pageNumber() {
+        return pageNumber;
     }
 
     void append(EntryRecord entryRecord) {
