@@ -7,6 +7,8 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 final class PageProvider {
+    private final byte[] emptyPage;
+    private final ThreadLocal<ByteBuffer> threadLocalBuffer;
     private final int pageSize;
     private final int maxNrPages;
     private final FileChannel fileChannel;
@@ -17,8 +19,10 @@ final class PageProvider {
         this.pageSize = pageSize;
         this.maxNrPages = maxNrPages;
         this.fileChannel = fileChannel;
-        this.pageCache = new PageCache(maxNrPages);
+        this.pageCache = new PageCache(maxNrPages, pageSize);
         this.pageNumber = 0;
+        this.threadLocalBuffer = ThreadLocal.withInitial(() -> ByteBuffer.allocate(pageSize));
+        this.emptyPage = new byte[pageSize];
     }
 
     Iterator<RecordPage> iterator() {
@@ -84,11 +88,23 @@ final class PageProvider {
         return (pageNumber - 1L) * pageSize;
     }
 
+    private ByteBuffer getClearPage() {
+        ByteBuffer byteBuffer = threadLocalBuffer.get();
+        byteBuffer.clear();
+        byteBuffer.put(emptyPage);
+        byteBuffer.rewind();
+        return byteBuffer;
+    }
+
     private class PageIterator implements Iterator<RecordPage> {
+
+        private final ByteBuffer byteBuffer;
         private int currentPage;
+
 
         PageIterator(int pageNumber) {
             this.currentPage = pageNumber;
+            this.byteBuffer = getClearPage();
         }
 
         @Override
@@ -101,10 +117,9 @@ final class PageProvider {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
-            RecordPage recordPage = pageCache.get(currentPage);
+            RecordPage recordPage = pageCache.get(currentPage, byteBuffer);
             if (recordPage == null) {
                 try {
-                    ByteBuffer byteBuffer = ByteBuffer.allocate(pageSize);
                     fileChannel.read(byteBuffer, getFileOffset(currentPage));
                     recordPage = new RecordPage(pageSize, byteBuffer, currentPage);
                     pageCache.put(currentPage, recordPage);

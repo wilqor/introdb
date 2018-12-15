@@ -14,6 +14,14 @@ class RecordPage {
         this.pageNumber = pageNumber;
     }
 
+    RecordPage(RecordPage copy, ByteBuffer byteBuffer) {
+        this.pageSize = copy.pageSize;
+        this.pageNumber = copy.pageNumber;
+        this.byteBuffer = byteBuffer;
+        copy.byteBuffer.rewind();
+        this.byteBuffer.put(copy.byteBuffer);
+    }
+
     ByteBuffer buffer() {
         return byteBuffer;
     }
