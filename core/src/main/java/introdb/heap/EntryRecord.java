@@ -101,16 +101,18 @@ final class EntryRecord {
     }
 
     private static byte[] serialize(Serializable obj) throws IOException {
-        var outStr = new ByteArrayOutputStream();
-        var objOutStr = new ObjectOutputStream(outStr);
-        objOutStr.writeObject(obj);
-        return outStr.toByteArray();
+        try (var outStr = new ByteArrayOutputStream();
+             var objOutStr = new ObjectOutputStream(outStr)) {
+            objOutStr.writeObject(obj);
+            return outStr.toByteArray();
+        }
     }
 
     private static Serializable deserialize(byte[] bytes) throws IOException, ClassNotFoundException {
-        var inStr = new ByteArrayInputStream(bytes);
-        var objInStr = new ObjectInputStream(inStr);
-        return (Serializable) objInStr.readObject();
+        try (var inStr = new ByteArrayInputStream(bytes);
+             var objInStr = new ObjectInputStream(inStr)) {
+            return (Serializable) objInStr.readObject();
+        }
     }
 
     static int findRemainingSpace(ByteBuffer byteBuffer, int pageSize) {
