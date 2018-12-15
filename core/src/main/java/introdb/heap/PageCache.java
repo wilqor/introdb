@@ -18,7 +18,7 @@ final class PageCache {
     RecordPage get(int pageNumber) {
         var pageSoftReference = numbersToPages.get(pageNumber);
         if (pageSoftReference != null) {
-            pageSoftReference.get();
+            return pageSoftReference.get();
         }
         return null;
     }
