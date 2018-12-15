@@ -10,12 +10,14 @@ final class PageProvider {
     private final int pageSize;
     private final int maxNrPages;
     private final FileChannel fileChannel;
+    private final PageCache pageCache;
     private int pageNumber;
 
     PageProvider(int maxNrPages, int pageSize, FileChannel fileChannel) {
         this.pageSize = pageSize;
         this.maxNrPages = maxNrPages;
         this.fileChannel = fileChannel;
+        this.pageCache = new PageCache(maxNrPages);
         this.pageNumber = 0;
     }
 
@@ -50,6 +52,7 @@ final class PageProvider {
         buffer.clear();
         fileChannel.write(buffer, getFileOffset(recordPageNumber));
         boolean newPage = recordPageNumber == nextPage;
+        pageCache.remove(recordPageNumber);
         if (newPage) {
             pageNumber++;
         }
@@ -98,15 +101,19 @@ final class PageProvider {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
-            ByteBuffer byteBuffer = ByteBuffer.allocate(pageSize);
-            try {
-                fileChannel.read(byteBuffer, getFileOffset(currentPage));
-                RecordPage recordPage = new RecordPage(pageSize, byteBuffer, currentPage);
-                currentPage--;
-                return recordPage;
-            } catch (IOException e) {
-                throw new RuntimeException("Error reading page of entries", e);
+            RecordPage recordPage = pageCache.get(currentPage);
+            if (recordPage == null) {
+                try {
+                    ByteBuffer byteBuffer = ByteBuffer.allocate(pageSize);
+                    fileChannel.read(byteBuffer, getFileOffset(currentPage));
+                    recordPage = new RecordPage(pageSize, byteBuffer, currentPage);
+                    pageCache.put(currentPage, recordPage);
+                } catch (IOException e) {
+                    throw new RuntimeException("Error reading page of entries", e);
+                }
             }
+            currentPage--;
+            return recordPage;
         }
     }
 }
