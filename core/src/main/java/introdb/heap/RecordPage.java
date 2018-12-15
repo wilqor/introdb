@@ -1,7 +1,6 @@
 package introdb.heap;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.nio.ByteBuffer;
 
 class RecordPage {
@@ -35,11 +34,10 @@ class RecordPage {
     }
 
 
-    PageRecord search(Serializable key) throws IOException, ClassNotFoundException {
+    PageRecord search(byte[] keyBytes) throws IOException, ClassNotFoundException {
         byteBuffer.clear();
         EntryRecord.PartialEntryRecord partial;
         int bufferPosition = pageSize;
-        byte[] keyBytes = EntryRecord.keyToBytes(key);
         while ((partial = EntryRecord.partialFromBuffer(byteBuffer, bufferPosition)) != null) {
             bufferPosition = partial.pageOffset();
             if (partial.hasSameKey(keyBytes)) {

@@ -28,9 +28,9 @@ class UnorderedHeapFile implements Store {
 
     @Override
     public Object get(Serializable key) throws IOException, ClassNotFoundException {
-        var entry = findEntry(key);
-        if (entry != null) {
-            return entry.value();
+        var pageWithRecord = findPageWithRecord(key);
+        if (pageWithRecord != null) {
+            return pageWithRecord.record().entry().value();
         }
         return null;
     }
@@ -56,23 +56,12 @@ class UnorderedHeapFile implements Store {
 
     private PageWithRecord findPageWithRecord(Serializable key) throws IOException, ClassNotFoundException {
         var pageIterator = pageProvider.iterator();
+        var keyBytes = EntryRecord.keyToBytes(key);
         while (pageIterator.hasNext()) {
             var page = pageIterator.next();
-            var pageRecord = page.search(key);
+            var pageRecord = page.search(keyBytes);
             if (pageRecord != null && pageRecord.notDeleted()) {
                 return new PageWithRecord(page, pageRecord);
-            }
-        }
-        return null;
-    }
-
-    private Entry findEntry(Serializable key) throws IOException, ClassNotFoundException {
-        var pageIterator = pageProvider.iterator();
-        while (pageIterator.hasNext()) {
-            var page = pageIterator.next();
-            var pageRecord = page.search(key);
-            if (pageRecord != null && pageRecord.notDeleted()) {
-                return pageRecord.entry();
             }
         }
         return null;
