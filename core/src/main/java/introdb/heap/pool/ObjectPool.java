@@ -2,25 +2,21 @@ package introdb.heap.pool;
 
 import static java.util.concurrent.CompletableFuture.completedFuture;
 
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ObjectPool<T> {
 
-	private final ConcurrentLinkedQueue<T> objectPool = new ConcurrentLinkedQueue<>();
-	private final ConcurrentLinkedQueue<CompletableFuture<T>> borrowObjectTasks = new ConcurrentLinkedQueue<>();
-	private final ExecutorService waitingTasks = Executors
-	        .newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-
-	private final AtomicInteger poolSize = new AtomicInteger(0);
-
 	private final ObjectFactory<T> fcty;
 	private final ObjectValidator<T> validator;
 	private final int maxPoolSize;
+
+	private final ArrayBlockingQueue<T> objectPool;
+	private final ConcurrentLinkedQueue<CompletableFuture<T>> borrowObjectTasks = new ConcurrentLinkedQueue<>();
+
+	private final AtomicInteger poolSize = new AtomicInteger(0);
 
 	public ObjectPool(ObjectFactory<T> fcty, ObjectValidator<T> validator) {
 		this(fcty, validator, 25);
@@ -30,6 +26,7 @@ public class ObjectPool<T> {
 		this.fcty = fcty;
 		this.validator = validator;
 		this.maxPoolSize = maxPoolSize;
+		this.objectPool = new ArrayBlockingQueue<>(maxPoolSize);
 	}
 
 	/**
@@ -58,16 +55,14 @@ public class ObjectPool<T> {
 			if (next > maxPoolSize) { // when competing thread reached max first, wait
 				return uncompletedRequest();
 			}
-		} while (claimed!=poolSize.compareAndExchangeRelease(claimed, next));
+		} while (!poolSize.compareAndSet(claimed, next));
 
-		object = fcty.create();
-
-		return completedFuture(object);
+		return completedFuture(fcty.create());
 	}
 
 	public void returnObject(T object) {
 		if (validator.validate(object)) {
-			// piggyback, on release check if there is any task waiting for object
+			// piggyback, on release, check if there is any task waiting for object
 			CompletableFuture<T> future = borrowObjectTasks.poll();
 			if (future != null) {
 				future.complete(object);
@@ -78,13 +73,10 @@ public class ObjectPool<T> {
 	}
 
 	public void shutdown() throws InterruptedException {
-		waitingTasks.shutdown();
-		waitingTasks.awaitTermination(10, TimeUnit.SECONDS);
 	}
 
 	public int getPoolSize() {
-		long currentState = poolSize.get();
-		return (int) currentState;
+		return poolSize.get();
 	}
 
 	public int getInUse() {
