@@ -101,16 +101,18 @@ final class EntryRecord {
     }
 
     private static byte[] serialize(Serializable obj) throws IOException {
-        var outStr = new ByteArrayOutputStream();
-        var objOutStr = new ObjectOutputStream(outStr);
-        objOutStr.writeObject(obj);
-        return outStr.toByteArray();
+        try (var outStr = new ByteArrayOutputStream();
+             var objOutStr = new ObjectOutputStream(outStr)) {
+            objOutStr.writeObject(obj);
+            return outStr.toByteArray();
+        }
     }
 
     private static Serializable deserialize(byte[] bytes) throws IOException, ClassNotFoundException {
-        var inStr = new ByteArrayInputStream(bytes);
-        var objInStr = new ObjectInputStream(inStr);
-        return (Serializable) objInStr.readObject();
+        try (var inStr = new ByteArrayInputStream(bytes);
+             var objInStr = new ObjectInputStream(inStr)) {
+            return (Serializable) objInStr.readObject();
+        }
     }
 
     static int findRemainingSpace(ByteBuffer byteBuffer, int pageSize) {
@@ -157,21 +159,24 @@ final class EntryRecord {
             byte[] bufferBytes = byteBuffer.array();
             byte[] keyBytes = Arrays.copyOfRange(bufferBytes, offset - keySize, offset);
             offset -= keySize;
-            byte[] valueBytes = Arrays.copyOfRange(bufferBytes, offset - valueSize, offset);
             int pageOffset = offset - valueSize;
-            return PartialEntryRecord.fromBytes(keyBytes, valueBytes, deletedFlag == DELETED_TRUE, pageOffset);
+            return PartialEntryRecord.fromBytes(keyBytes, valueSize, offset, bufferBytes, deletedFlag == DELETED_TRUE, pageOffset);
         }
     }
 
     static final class PartialEntryRecord {
         private final byte[] keyBytes;
-        private final byte[] valueBytes;
+        private final byte[] bufferBytes;
+        private final short valueSize;
+        private final int offset;
         private final boolean deleted;
         private final int pageOffset;
 
-        private PartialEntryRecord(byte[] keyBytes, byte[] valueBytes, boolean deleted, int pageOffset) {
+        private PartialEntryRecord(byte[] keyBytes, short valueSize, int offset, byte[] bufferBytes, boolean deleted, int pageOffset) {
             this.keyBytes = keyBytes;
-            this.valueBytes = valueBytes;
+            this.valueSize = valueSize;
+            this.offset = offset;
+            this.bufferBytes = bufferBytes;
             this.deleted = deleted;
             this.pageOffset = pageOffset;
         }
@@ -180,11 +185,12 @@ final class EntryRecord {
             return pageOffset;
         }
 
-        static PartialEntryRecord fromBytes(byte[] keyBytes, byte[] valueBytes, boolean deleted, int pageOffset) {
-            return new PartialEntryRecord(keyBytes, valueBytes, deleted, pageOffset);
+        static PartialEntryRecord fromBytes(byte[] keyBytes, short valueSize, int offset, byte[] bufferBytes, boolean deleted, int pageOffset) {
+            return new PartialEntryRecord(keyBytes, valueSize, offset, bufferBytes, deleted, pageOffset);
         }
 
         PageRecord toRecord() throws IOException, ClassNotFoundException {
+            byte[] valueBytes = Arrays.copyOfRange(bufferBytes, offset - valueSize, offset);
             var key = deserialize(keyBytes);
             var value = deserialize(valueBytes);
             var entry = new Entry(key, value);

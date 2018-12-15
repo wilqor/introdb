@@ -7,15 +7,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
 class UnorderedHeapFile implements Store {
-    private static final int MAX_CACHED_ENTRIES = 10;
     private final PageProvider pageProvider;
-    private final Cache<Serializable, Entry> entryReadCache;
 
     UnorderedHeapFile(Path path, int maxNrPages, int pageSize) {
         try {
             FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ);
             this.pageProvider = new PageProvider(maxNrPages, pageSize, fileChannel);
-            this.entryReadCache = new Cache<>(MAX_CACHED_ENTRIES);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -27,15 +24,13 @@ class UnorderedHeapFile implements Store {
         var page = pageProvider.pageForAppending(record.recordSize());
         page.append(record);
         pageProvider.save(page);
-        entryReadCache.put(record.entry().key(), record.entry());
     }
 
     @Override
     public Object get(Serializable key) throws IOException, ClassNotFoundException {
-        var entry = findEntry(key);
-        if (entry != null) {
-            entryReadCache.put(key, entry);
-            return entry.value();
+        var pageWithRecord = findPageWithRecord(key);
+        if (pageWithRecord != null) {
+            return pageWithRecord.record().entry().value();
         }
         return null;
     }
@@ -55,34 +50,18 @@ class UnorderedHeapFile implements Store {
             var page = pageWithRecord.page();
             page.delete(pageWithRecord.record());
             pageProvider.save(page);
-            entryReadCache.invalidate(key);
         }
         return pageWithRecord;
     }
 
     private PageWithRecord findPageWithRecord(Serializable key) throws IOException, ClassNotFoundException {
         var pageIterator = pageProvider.iterator();
+        var keyBytes = EntryRecord.keyToBytes(key);
         while (pageIterator.hasNext()) {
             var page = pageIterator.next();
-            var pageRecord = page.search(key);
+            var pageRecord = page.search(keyBytes);
             if (pageRecord != null && pageRecord.notDeleted()) {
                 return new PageWithRecord(page, pageRecord);
-            }
-        }
-        return null;
-    }
-
-    private Entry findEntry(Serializable key) throws IOException, ClassNotFoundException {
-        Entry cachedEntry = entryReadCache.get(key);
-        if (cachedEntry != null) {
-            return cachedEntry;
-        }
-        var pageIterator = pageProvider.iterator();
-        while (pageIterator.hasNext()) {
-            var page = pageIterator.next();
-            var pageRecord = page.search(key);
-            if (pageRecord != null && pageRecord.notDeleted()) {
-                return pageRecord.entry();
             }
         }
         return null;

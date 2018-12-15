@@ -1,26 +1,33 @@
 package introdb.heap;
 
 import java.io.IOException;
-import java.io.Serializable;
 import java.nio.ByteBuffer;
 
 class RecordPage {
     private final int pageSize;
     private final ByteBuffer byteBuffer;
-    private final long fileOffset;
+    private final int pageNumber;
 
-    RecordPage(int pageSize, ByteBuffer byteBuffer, long fileOffset) {
+    RecordPage(int pageSize, ByteBuffer byteBuffer, int pageNumber) {
         this.pageSize = pageSize;
         this.byteBuffer = byteBuffer;
-        this.fileOffset = fileOffset;
+        this.pageNumber = pageNumber;
+    }
+
+    RecordPage(RecordPage copy, ByteBuffer byteBuffer) {
+        this.pageSize = copy.pageSize;
+        this.pageNumber = copy.pageNumber;
+        this.byteBuffer = byteBuffer;
+        copy.byteBuffer.rewind();
+        this.byteBuffer.put(copy.byteBuffer);
     }
 
     ByteBuffer buffer() {
         return byteBuffer;
     }
 
-    long fileOffset() {
-        return fileOffset;
+    int pageNumber() {
+        return pageNumber;
     }
 
     void append(EntryRecord entryRecord) {
@@ -35,11 +42,10 @@ class RecordPage {
     }
 
 
-    PageRecord search(Serializable key) throws IOException, ClassNotFoundException {
+    PageRecord search(byte[] keyBytes) throws IOException, ClassNotFoundException {
         byteBuffer.clear();
         EntryRecord.PartialEntryRecord partial;
         int bufferPosition = pageSize;
-        byte[] keyBytes = EntryRecord.keyToBytes(key);
         while ((partial = EntryRecord.partialFromBuffer(byteBuffer, bufferPosition)) != null) {
             bufferPosition = partial.pageOffset();
             if (partial.hasSameKey(keyBytes)) {

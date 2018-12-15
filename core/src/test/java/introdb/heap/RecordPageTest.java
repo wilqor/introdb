@@ -17,10 +17,8 @@ import static org.junit.Assert.*;
 class RecordPageTest {
 
     private static final int PAGE_SIZE = 4 * 1024;
-    private static final int FILE_OFFSET = 8 * 1024;
     private FileChannel fileChannel;
     private Path pageFilePath;
-    private ByteBuffer byteBuffer;
 
     private RecordPage recordPage;
 
@@ -28,14 +26,10 @@ class RecordPageTest {
     void setUp() throws IOException {
         pageFilePath = Files.createTempFile("page", ".suffix");
         fileChannel = FileChannel.open(pageFilePath, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ);
-        byteBuffer = ByteBuffer.allocate(PAGE_SIZE);
+        ByteBuffer byteBuffer = ByteBuffer.allocate(PAGE_SIZE);
         byteBuffer.limit(PAGE_SIZE);
         byteBuffer.position(PAGE_SIZE);
-        recordPage = new RecordPage(
-                PAGE_SIZE,
-                byteBuffer,
-                FILE_OFFSET
-        );
+        recordPage = new RecordPage(PAGE_SIZE, byteBuffer, 1);
     }
 
     @AfterEach
@@ -57,7 +51,7 @@ class RecordPageTest {
 
     @Test
     void searching_empty_page_returns_null() throws IOException, ClassNotFoundException {
-        PageRecord pageRecord = recordPage.search("record 1");
+        PageRecord pageRecord = recordPage.search(EntryRecord.keyToBytes("record 1"));
 
         assertNull(pageRecord);
     }
@@ -69,8 +63,8 @@ class RecordPageTest {
 
         recordPage.append(record1);
         recordPage.append(record2);
-        PageRecord pageRecord1 = recordPage.search("record 1");
-        PageRecord pageRecord2 = recordPage.search("record 2");
+        PageRecord pageRecord1 = recordPage.search(EntryRecord.keyToBytes("record 1"));
+        PageRecord pageRecord2 = recordPage.search(EntryRecord.keyToBytes("record 2"));
 
         assertNotNull(pageRecord1);
         assertEquals(0, pageRecord1.pageOffset());
@@ -85,7 +79,7 @@ class RecordPageTest {
 
         recordPage.append(record);
         recordPage.append(sameKeyRecord);
-        PageRecord pageRecord = recordPage.search("record 1");
+        PageRecord pageRecord = recordPage.search(EntryRecord.keyToBytes("record 1"));
 
         assertNotNull(pageRecord);
         assertEquals(new PageRecord(sameKeyRecord, record.recordSize()), pageRecord);
@@ -96,9 +90,9 @@ class RecordPageTest {
         EntryRecord record = EntryRecord.fromEntry(new Entry("record 1", "content 1"));
 
         recordPage.append(record);
-        PageRecord foundBeforeDeletion = recordPage.search("record 1");
+        PageRecord foundBeforeDeletion = recordPage.search(EntryRecord.keyToBytes("record 1"));
         recordPage.delete(foundBeforeDeletion);
-        PageRecord foundAfterDeletion = recordPage.search("record 1");
+        PageRecord foundAfterDeletion = recordPage.search(EntryRecord.keyToBytes("record 1"));
 
         assertNotNull(foundAfterDeletion);
         assertTrue(!foundAfterDeletion.notDeleted());

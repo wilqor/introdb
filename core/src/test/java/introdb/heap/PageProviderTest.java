@@ -23,18 +23,8 @@ class PageProviderTest {
     private static final int MAX_NR_PAGES = 10;
 
     @Test
-    void validates_file_size_divisible_by_page_size() throws Exception {
-        try (var file = new MockFile(PAGE_SIZE * 3 / 2)) {
-            assertThatThrownBy(() -> {
-                var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
-                pageProvider.pageForAppending(1024);
-            }).isInstanceOf(IllegalArgumentException.class);
-        }
-    }
-
-    @Test
     void validates_record_size_fitting_in_page_size() throws Exception {
-        try (var file = new MockFile(PAGE_SIZE * 10)) {
+        try (var file = new TempFile()) {
             var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
 
             assertThatThrownBy(() -> pageProvider.pageForAppending(PAGE_SIZE * 2))
@@ -44,54 +34,79 @@ class PageProviderTest {
 
     @Test
     @Disabled("not thrown to pass write performance tests")
-    void validates_max_pages_count_in_file() throws Exception {
-        try (var file = new MockFile(PAGE_SIZE * MAX_NR_PAGES, PAGE_SIZE)) {
+    void forbids_appending_to_page_number_higher_than_max_page() throws Exception {
+        try (var file = new TempFile()) {
             var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
-
+            for (int i = 1; i <= MAX_NR_PAGES; i++) {
+                pageProvider.save(dummyRecordPage(PAGE_SIZE, i));
+            }
             assertThatThrownBy(() -> pageProvider.pageForAppending(1024))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }
 
     @Test
-    void finds_file_start_for_appending_page_when_file_empty() throws Exception {
-        try (var file = new MockFile(0)) {
+    @Disabled("not thrown to pass write performance tests")
+    void forbids_saving_page_number_higher_than_max_page() throws Exception {
+        try (var file = new TempFile()) {
             var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
-
-            RecordPage recordPage = pageProvider.pageForAppending(1024);
-
-            assertEquals(0, recordPage.fileOffset());
+            for (int i = 1; i <= MAX_NR_PAGES; i++) {
+                pageProvider.save(dummyRecordPage(PAGE_SIZE, i));
+            }
+            assertThatThrownBy(() -> pageProvider.save(dummyRecordPage(PAGE_SIZE, MAX_NR_PAGES + 1)))
+                    .isInstanceOf(IllegalArgumentException.class);
         }
     }
 
     @Test
-    void finds_file_end_for_appending_page_when_file_full() throws Exception {
-        long fileLength = 4 * PAGE_SIZE;
-        try (var file = new MockFile(fileLength, fileLength - 1)) {
+    void forbids_saving_page_number_higher_than_the_next_one() throws Exception {
+        try (var file = new TempFile()) {
             var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
-
-            RecordPage recordPage = pageProvider.pageForAppending(1024);
-
-            assertEquals(fileLength, recordPage.fileOffset());
+            assertThatThrownBy(() -> pageProvider.save(dummyRecordPage(PAGE_SIZE, 2)))
+                    .isInstanceOf(IllegalArgumentException.class);
         }
     }
 
     @Test
-    void finds_space_inside_last_page_for_appending_page_when_enough_space_on_last_page() throws Exception {
-        long fileLength = 4 * PAGE_SIZE;
-        long endMarkerPosition = PAGE_SIZE / 2;
-        try (var file = new MockFile(fileLength, endMarkerPosition)) {
+    void finds_first_page_when_appending_for_the_first_time() throws Exception {
+        try (var file = new TempFile()) {
             var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
 
             RecordPage recordPage = pageProvider.pageForAppending(1024);
 
-            assertEquals(fileLength - PAGE_SIZE, recordPage.fileOffset());
+            assertEquals(1, recordPage.pageNumber());
         }
     }
 
     @Test
-    void provides_empty_iterator_for_empty_file() throws Exception {
-        try (var file = new MockFile(0)) {
+    void finds_next_page_for_appending_when_last_page_full() throws Exception {
+        try (var file = new TempFile()) {
+            var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
+            RecordPage fullPage = dummyRecordPage(PAGE_SIZE, 1);
+            pageProvider.save(fullPage);
+
+            RecordPage recordPage = pageProvider.pageForAppending(1024);
+
+            assertEquals(2, recordPage.pageNumber());
+        }
+    }
+
+    @Test
+    void finds_space_inside_last_page_for_appending_when_last_page_not_full() throws Exception {
+        try (var file = new TempFile()) {
+            var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
+            RecordPage notFullPage = dummyRecordPage(PAGE_SIZE / 2, 1);
+            pageProvider.save(notFullPage);
+
+            RecordPage recordPage = pageProvider.pageForAppending(1024);
+
+            assertEquals(1, recordPage.pageNumber());
+        }
+    }
+
+    @Test
+    void provides_empty_iterator_when_no_pages_saved() throws Exception {
+        try (var file = new TempFile()) {
             var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
 
             Iterator<RecordPage> iterator = pageProvider.iterator();
@@ -102,22 +117,25 @@ class PageProviderTest {
 
     @Test
     void iterates_pages_backward() throws Exception {
-        long pagesCount = 3;
-        try (var file = new MockFile(pagesCount * PAGE_SIZE)) {
+        try (var file = new TempFile()) {
             var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
 
-            Iterator<RecordPage> iterator = pageProvider.iterator();
-            List<Long> expectedFileOffsets = List.of(2L * PAGE_SIZE, (long) PAGE_SIZE, 0L);
-            List<Long> actualPageOffsets = new ArrayList<>();
-            iterator.forEachRemaining(recordPage -> actualPageOffsets.add(recordPage.fileOffset()));
+            pageProvider.save(dummyRecordPage(PAGE_SIZE, 1));
+            pageProvider.save(dummyRecordPage(PAGE_SIZE, 2));
+            pageProvider.save(dummyRecordPage(PAGE_SIZE, 3));
 
-            assertEquals(expectedFileOffsets, actualPageOffsets);
+            Iterator<RecordPage> iterator = pageProvider.iterator();
+            List<Integer> expectedPageNumbers = List.of(3, 2, 1);
+            List<Integer> actualPageNumbers = new ArrayList<>();
+            iterator.forEachRemaining(recordPage -> actualPageNumbers.add(recordPage.pageNumber()));
+
+            assertEquals(expectedPageNumbers, actualPageNumbers);
         }
     }
 
     @Test
-    void saves_page() throws Exception {
-        try (var file = new MockFile(0)) {
+    void saves_page_content() throws Exception {
+        try (var file = new TempFile()) {
             var pageProvider = new PageProvider(MAX_NR_PAGES, PAGE_SIZE, file.channel());
 
             byte[] dummyPageBytes = new byte[PAGE_SIZE];
@@ -125,7 +143,7 @@ class PageProviderTest {
             dummyPageBytes[dummyPageRecordLength - 1] = EntryRecord.END_MARKER;
             ByteBuffer buffer = ByteBuffer.wrap(dummyPageBytes);
             buffer.put(dummyPageBytes);
-            RecordPage recordPage = new RecordPage(PAGE_SIZE, buffer, 0);
+            RecordPage recordPage = new RecordPage(PAGE_SIZE, buffer, 1);
             pageProvider.save(recordPage);
             Iterator<RecordPage> iterator = pageProvider.iterator();
 
@@ -136,21 +154,21 @@ class PageProviderTest {
         }
     }
 
-    private static final class MockFile implements AutoCloseable {
+    private RecordPage dummyRecordPage(int pageBytes, int pageNumber) {
+        byte[] dummyBytes = new byte[PAGE_SIZE];
+        dummyBytes[pageBytes - 1] = EntryRecord.END_MARKER;
+        ByteBuffer buffer = ByteBuffer.wrap(dummyBytes);
+        buffer.put(dummyBytes);
+        return new RecordPage(PAGE_SIZE, buffer, pageNumber);
+    }
+
+    private static final class TempFile implements AutoCloseable {
         private final Path path;
         private final FileChannel channel;
 
-        MockFile(long length) throws IOException {
+        TempFile() throws IOException {
             path = createPath();
-            RandomAccessFile file = createFile(path, length);
-            channel = file.getChannel();
-        }
-
-        MockFile(long length, long endRecordMarkerPosition) throws IOException {
-            path = createPath();
-            RandomAccessFile file = createFile(path, length);
-            file.seek(endRecordMarkerPosition);
-            file.write(EntryRecord.END_MARKER);
+            RandomAccessFile file = createFile(path);
             channel = file.getChannel();
         }
 
@@ -162,10 +180,8 @@ class PageProviderTest {
             return Files.createTempFile(UUID.randomUUID().toString(), ".data");
         }
 
-        private RandomAccessFile createFile(Path path, long length) throws IOException {
-            RandomAccessFile randomAccessFile = new RandomAccessFile(path.toFile(), "rwd");
-            randomAccessFile.setLength(length);
-            return randomAccessFile;
+        private RandomAccessFile createFile(Path path) throws IOException {
+            return new RandomAccessFile(path.toFile(), "rwd");
         }
 
         @Override
