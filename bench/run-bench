@@ -26,5 +26,5 @@ for f in $forks; do
     echo "fork $f doesn't compile or tests failed, removing it"
     continue
   fi
-  java -jar perf/target/benchmarks.jar "introdb.heap.ReadUnorderedHeapFileBenchmark.readKey" -p key=10 -i 1 -wi 1 -f 1 -gc true -rff output.csv
+  java -jar perf/target/benchmarks.jar "introdb.heap.pool.ObjectPoolBenchmark.testPool"  -f 1 -gc true -rff output.csv
 done
