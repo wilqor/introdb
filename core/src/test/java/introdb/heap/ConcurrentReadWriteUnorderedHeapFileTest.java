@@ -1,145 +1,135 @@
 package introdb.heap;
 
-import static java.lang.String.format;
-import static java.util.stream.Collectors.toList;
-import static java.util.stream.IntStream.range;
-import static org.junit.jupiter.api.Assertions.fail;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Random;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.function.IntFunction;
-import java.util.function.Supplier;
-import java.util.logging.Logger;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-public class ConcurrentReadWriteUnorderedHeapFileTest {
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Random;
+import java.util.concurrent.*;
+import java.util.function.IntFunction;
+import java.util.function.Supplier;
+import java.util.logging.Logger;
 
-	private static final Logger LOG = Logger.getLogger("test.readwrite.concurrent");
+import static java.lang.String.format;
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.IntStream.range;
+import static org.junit.jupiter.api.Assertions.fail;
 
-	private static final int PAGE_SIZE = 4 * 1024;
-	private static final int MAX_NR_PAGES = 5_000_000;
-	private static final int OPS_PER_WORKER = 1_000;
-	
-	private int nrOfWriters = 5;
-	private int nrOfReaders = 5;
+class ConcurrentReadWriteUnorderedHeapFileTest {
 
-	private Path heapFilePath;
-	private Store heapFile;
-	private CountDownLatch writersLatch;
-	private ExecutorService executors;
+    private static final Logger LOG = Logger.getLogger("test.readwrite.concurrent");
 
-	@BeforeEach
-	public void setUp() throws IOException {
-		heapFilePath = Files.createTempFile("heap", "0001");
-		heapFile = new UnorderedHeapFile(heapFilePath, MAX_NR_PAGES, PAGE_SIZE);
+    private static final int PAGE_SIZE = 4 * 1024;
+    private static final int MAX_NR_PAGES = 5_000_000;
+    private static final int OPS_PER_WORKER = 1_000;
 
-		executors = Executors.newCachedThreadPool();
-	}
+    private int nrOfWriters = 5;
+    private int nrOfReaders = 5;
 
-	@AfterEach
-	public void tearDown() throws IOException, InterruptedException {
-		Files.delete(heapFilePath);
-		
-		executors.shutdown();
-		executors.awaitTermination(1, TimeUnit.MINUTES);
-		
-	}
+    private Path heapFilePath;
+    private Store heapFile;
+    private CountDownLatch writersLatch;
+    private ExecutorService executors;
 
-	@Test
-	@Tag("slow")
-	public void concurrentReadWrite() throws Exception {
+    @BeforeEach
+    void setUp() throws IOException {
+        heapFilePath = Files.createTempFile("heap", "0001");
+        heapFile = new UnorderedHeapFile(heapFilePath, MAX_NR_PAGES, PAGE_SIZE);
 
-		writersLatch = new CountDownLatch(nrOfWriters);		
-		
-		// schedule threads which execute writes to heap file
-		var ws = range(0, nrOfWriters)
-				.mapToObj(writersTasksWith(executors))
-				.collect(toList());
+        executors = Executors.newCachedThreadPool();
+    }
 
-		// schedule threads which execute reads to heap file
-		var rs = range(0, nrOfReaders)
-				.mapToObj(readersTasksWith(executors))
-				.collect(toList());
+    @AfterEach
+    void tearDown() throws IOException, InterruptedException {
+        Files.delete(heapFilePath);
 
-		// wait for readers to complete
-		CompletableFuture.allOf(ws.toArray(new CompletableFuture[ws.size()])).get(5,TimeUnit.MINUTES);
+        executors.shutdown();
+        executors.awaitTermination(1, TimeUnit.MINUTES);
+    }
 
-		// wait for writers to complete
-		CompletableFuture.allOf(rs.toArray(new CompletableFuture[rs.size()])).get(5,TimeUnit.MINUTES);
-		
-	}
+    @Test
+    @Tag("slow")
+    void concurrentReadWrite() throws Exception {
 
-	private IntFunction<CompletableFuture<Void>> readersTasksWith(ExecutorService executorService) {
-		return (i) -> {
-			return new CompletableFuture<>()
-					.completeAsync(uncheckedFuture(executorService.submit(this::doReads, i)))
-					.thenAccept( r-> LOG.info(format("reader %d is done",r)));
-		};
-	}
+        writersLatch = new CountDownLatch(nrOfWriters);
 
-	private IntFunction<CompletableFuture<Void>> writersTasksWith(ExecutorService writers) {
-		return (i) -> {
-			return new CompletableFuture<>()
-					.completeAsync(uncheckedFuture(writers.submit(this::doWrites, i)))
-					.thenAccept( r-> LOG.info(format("writer %d is done",r)));
-		};
-	}
+        // schedule threads which execute writes to heap file
+        var ws = range(0, nrOfWriters)
+                .mapToObj(writersTasksWith(executors))
+                .collect(toList());
 
-	private void doReads() {
-		try {
-			// waiting for writers to start
-			writersLatch.await();
-		} catch (InterruptedException e) {
-			fail(e);
-		}
-		
-		Random random = new Random();
-		for (int i = 0; i < OPS_PER_WORKER; i++) {
-			try {
-				int nextInt = random.nextInt(20);
-				Integer value = (Integer) heapFile.get(nextInt);
-				if (value != null && !value.equals(Integer.valueOf(nextInt))) {
-					fail("incorrect value read from heap file");
-				}
-			} catch (ClassNotFoundException | IOException e) {
-				fail(e);
-			}
-		}
-	}
+        // schedule threads which execute reads to heap file
+        var rs = range(0, nrOfReaders)
+                .mapToObj(readersTasksWith(executors))
+                .collect(toList());
 
-	private void doWrites() {
-		writersLatch.countDown();
-		Random random = new Random();
-		for (int i = 0; i < OPS_PER_WORKER; i++) {
-			try {
-				int nextInt = random.nextInt(20);
-				heapFile.put(new Entry(nextInt, nextInt));
-			} catch (ClassNotFoundException | IOException e) {
-				fail(e);
-			}
-		}
-	}
+        // wait for readers to complete
+        CompletableFuture.allOf(ws.toArray(new CompletableFuture[ws.size()])).get(5, TimeUnit.MINUTES);
 
-	public <T> Supplier<T> uncheckedFuture(Future<T> future) {
-		return () -> {
-			try {
-				return future.get();
-			} catch (InterruptedException | ExecutionException e) {
-				throw new RuntimeException(e);
-			}
-		};
-	}
+
+        // wait for writers to complete
+        CompletableFuture.allOf(rs.toArray(new CompletableFuture[rs.size()])).get(5, TimeUnit.MINUTES);
+
+    }
+
+    private IntFunction<CompletableFuture<Void>> readersTasksWith(ExecutorService executorService) {
+        return (i) -> new CompletableFuture<>()
+                .completeAsync(uncheckedFuture(executorService.submit(this::doReads, i)))
+                .thenAccept(r -> LOG.info(format("reader %d is done", r)));
+    }
+
+    private IntFunction<CompletableFuture<Void>> writersTasksWith(ExecutorService writers) {
+        return (i) -> new CompletableFuture<>()
+                .completeAsync(uncheckedFuture(writers.submit(this::doWrites, i)))
+                .thenAccept(r -> LOG.info(format("writer %d is done", r)));
+    }
+
+    private void doReads() {
+        try {
+            // waiting for writers to start
+            writersLatch.await();
+        } catch (InterruptedException e) {
+            fail(e);
+        }
+
+        Random random = new Random();
+        for (int i = 0; i < OPS_PER_WORKER; i++) {
+            try {
+                int nextInt = random.nextInt(20);
+                Integer value = (Integer) heapFile.get(nextInt);
+                if (value != null && !value.equals(nextInt)) {
+                    fail("incorrect value read from heap file");
+                }
+            } catch (ClassNotFoundException | IOException e) {
+                fail(e);
+            }
+        }
+    }
+
+    private void doWrites() {
+        writersLatch.countDown();
+        Random random = new Random();
+        for (int i = 0; i < OPS_PER_WORKER; i++) {
+            try {
+                int nextInt = random.nextInt(20);
+                heapFile.put(new Entry(nextInt, nextInt));
+            } catch (ClassNotFoundException | IOException e) {
+                fail(e);
+            }
+        }
+    }
+
+    <T> Supplier<T> uncheckedFuture(Future<T> future) {
+        return () -> {
+            try {
+                return future.get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        };
+    }
 }
