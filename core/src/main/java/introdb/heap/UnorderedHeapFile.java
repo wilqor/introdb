@@ -5,53 +5,78 @@ import java.io.Serializable;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 class UnorderedHeapFile implements Store {
     private final PageProvider pageProvider;
+    private final ReentrantReadWriteLock lock;
 
     UnorderedHeapFile(Path path, int maxNrPages, int pageSize) {
         try {
             FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.READ);
             this.pageProvider = new PageProvider(maxNrPages, pageSize, fileChannel);
+            this.lock = new ReentrantReadWriteLock();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
     @Override
-    public synchronized void put(Entry entry) throws IOException {
+    public void put(Entry entry) throws IOException {
         var record = EntryRecord.fromEntry(entry);
-        var page = pageProvider.pageForAppending(record.recordSize());
-        page.append(record);
-        pageProvider.save(page);
-    }
-
-    @Override
-    public synchronized Object get(Serializable key) throws IOException, ClassNotFoundException {
-        var pageWithRecord = findPageWithRecord(key);
-        if (pageWithRecord != null) {
-            return pageWithRecord.record().entry().value();
-        }
-        return null;
-    }
-
-    @Override
-    public synchronized Object remove(Serializable key) throws IOException, ClassNotFoundException {
-        var pageWithRecord = findAndDeleteRecord(key);
-        if (pageWithRecord != null) {
-            return pageWithRecord.record().entry().value();
-        }
-        return null;
-    }
-
-    private PageWithRecord findAndDeleteRecord(Serializable key) throws IOException, ClassNotFoundException {
-        var pageWithRecord = findPageWithRecord(key);
-        if (pageWithRecord != null) {
-            var page = pageWithRecord.page();
-            page.delete(pageWithRecord.record());
+        lock.writeLock().lock();
+        try {
+            lock.readLock().lock();
+            RecordPage page;
+            try {
+                page = pageProvider.pageForAppending(record.recordSize());
+            } finally {
+                lock.readLock().unlock();
+            }
+            page.append(record);
             pageProvider.save(page);
+        } finally {
+            lock.writeLock().unlock();
         }
-        return pageWithRecord;
+    }
+
+    @Override
+    public Object get(Serializable key) throws IOException, ClassNotFoundException {
+        lock.readLock().lock();
+        try {
+            var pageWithRecord = findPageWithRecord(key);
+            if (pageWithRecord != null) {
+                return pageWithRecord.record().entry().value();
+            }
+        } finally {
+            lock.readLock().unlock();
+        }
+        return null;
+    }
+
+    @Override
+    public Object remove(Serializable key) throws IOException, ClassNotFoundException {
+        lock.writeLock().lock();
+        try {
+            lock.readLock().lock();
+            PageWithRecord pageWithRecord;
+            try {
+                pageWithRecord = findPageWithRecord(key);
+            } finally {
+                lock.readLock().unlock();
+            }
+            if (pageWithRecord != null) {
+                var page = pageWithRecord.page();
+                page.delete(pageWithRecord.record());
+                pageProvider.save(page);
+            }
+            if (pageWithRecord != null) {
+                return pageWithRecord.record().entry().value();
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+        return null;
     }
 
     private PageWithRecord findPageWithRecord(Serializable key) throws IOException, ClassNotFoundException {
